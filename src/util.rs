@@ -19,6 +19,7 @@ macro_rules! into_the_future {
                         match res {
                             Err(e) if e.code() == -37 => {
                                 if let Some(ref poll_evented) = *self.poll_evented {
+                                    // TODO write or read or both...
                                     poll_evented.clear_read_ready(cx, ready).unwrap();
                                 }
                                 return Poll::Pending;
