@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 #ssh2 = "0.6"
-ssh2 = { path = "../ssh2-rs" }
+ssh2 = { git = "https://github.com/spebern/ssh2-rs" }
 tokio = { version = "0.2.6", features = ["full"] }
 mio = { version = "0.6.21" }
 libc = "0.2"
