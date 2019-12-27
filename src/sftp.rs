@@ -45,14 +45,16 @@ impl Sftp {
     }
 
     /// Open a handle to a file.
-    pub fn open_mode(
+    pub async fn open_mode(
         &self,
         filename: &Path,
         flags: ssh2::OpenFlags,
         mode: i32,
         open_type: ssh2::OpenType,
-    ) -> Result<File, Error> {
-        todo!()
+    ) -> Result<File<'_>, Error> {
+        let poll_evented = self.poll_evented();
+        let file = into_the_future!(poll_evented; &mut || { self.inner.open_mode(filename, flags, mode, open_type) })?;
+        Ok(File::new(file, self.poll_evented()))
     }
 
     /// Helper to open a file in the `Read` mode.
@@ -110,11 +112,9 @@ impl Sftp {
     }
 
     /// Set the metadata for a file.
-    // TODO: cannot work because stat is not copy
     pub async fn setstat(&self, filename: &Path, stat: ssh2::FileStat) -> Result<(), Error> {
-        todo!();
-        //let poll_evented = self.poll_evented();
-        //into_the_future!(poll_evented; &mut || { self.inner.setstat(filename, stat) })
+        let poll_evented = self.poll_evented();
+        into_the_future!(poll_evented; &mut || { self.inner.setstat(filename, stat.clone()) })
     }
 
     /// Create a symlink at `target` pointing at `path`.

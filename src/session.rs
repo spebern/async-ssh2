@@ -130,7 +130,6 @@ impl Session {
     /// concurrently elsewhere for the duration of this session as it may
     /// interfere with the protocol.
     pub fn set_tcp_stream(&mut self, stream: TcpStream) {
-        // TODO set poll_evented
         self.poll_evented = Arc::new(Some(PollEvented::new(Io::new(stream.as_raw_fd())).unwrap()));
         self.inner.set_tcp_stream(stream);
     }

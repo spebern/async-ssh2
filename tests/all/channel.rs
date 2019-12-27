@@ -107,7 +107,6 @@ async fn eof() {
     assert_eq!(output, "");
 }
 
-/*
 #[tokio::test]
 async fn shell() {
     let sess = crate::authed_session().await;
@@ -121,7 +120,6 @@ async fn shell() {
     eprintln!("done");
     consume_stdio(&mut channel).await;
 }
-*/
 
 #[tokio::test]
 async fn setenv() {

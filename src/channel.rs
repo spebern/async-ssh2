@@ -74,9 +74,8 @@ impl Channel {
         mode: Option<PtyModes>,
         dim: Option<(u32, u32, u32, u32)>,
     ) -> Result<(), Error> {
-        todo!("not possible without mode implementing copy/clone");
-        //let poll_evented = self.poll_evented();
-        //into_the_future!(poll_evented; &mut || { self.inner.request_pty(term, mode, dim) })
+        let poll_evented = self.poll_evented();
+        into_the_future!(poll_evented; &mut || { self.inner.request_pty(term, mode.clone(), dim) })
     }
 
     /// Request that the PTY size be changed to the specified size.
