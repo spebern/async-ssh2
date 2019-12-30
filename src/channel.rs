@@ -1,6 +1,7 @@
-use crate::{aio::Aio, into_the_future};
-use ssh2::{self, Error, ExitSignal, ExtendedData, PtyModes, ReadWindow, Stream, WriteWindow};
+use crate::{aio::Aio, into_the_future, Error};
+use ssh2::{self, ExitSignal, ExtendedData, PtyModes, ReadWindow, Stream, WriteWindow};
 use std::{
+    convert::From,
     future::Future,
     io,
     io::{Read, Write},
@@ -99,12 +100,12 @@ impl Channel {
 
     /// See [`exit_status`](ssh2::Channel::exit_status).
     pub fn exit_status(&self) -> Result<i32, Error> {
-        self.inner.exit_status()
+        self.inner.exit_status().map_err(From::from)
     }
 
     /// See [`exit_signal`](ssh2::Channel::exit_signal).
     pub fn exit_signal(&self) -> Result<ExitSignal, Error> {
-        self.inner.exit_signal()
+        self.inner.exit_signal().map_err(From::from)
     }
 
     /// See [`read_window`](ssh2::Channel::read_window).
@@ -170,7 +171,7 @@ impl AsyncRead for Channel {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }
@@ -192,7 +193,7 @@ impl AsyncWrite for Channel {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }
@@ -208,7 +209,7 @@ impl AsyncWrite for Channel {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }

@@ -1,7 +1,8 @@
-use crate::{aio::Aio, into_the_future};
+use crate::{aio::Aio, into_the_future, Error};
 use libc::c_int;
-use ssh2::{self, Error, FileStat};
+use ssh2::{self, FileStat};
 use std::{
+    convert::From,
     future::Future,
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -135,12 +136,12 @@ impl Sftp {
 
     /// See [`last_error`](ssh2::Sftp::last_error).
     pub fn last_error(&self) -> Error {
-        self.inner.last_error()
+        From::from(self.inner.last_error())
     }
 
     /// See [`rc`](ssh2::Sftp::rc).
     pub fn rc(&self, rc: c_int) -> Result<(), Error> {
-        self.inner.rc(rc)
+        self.inner.rc(rc).map_err(From::from)
     }
 }
 
@@ -195,7 +196,7 @@ impl<'sftp> AsyncRead for File<'sftp> {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }
@@ -217,7 +218,7 @@ impl<'sftp> AsyncWrite for File<'sftp> {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }
@@ -233,7 +234,7 @@ impl<'sftp> AsyncWrite for File<'sftp> {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx).unwrap();
+                        aio.set_waker(cx)?;
                     }
                     return Poll::Pending;
                 }

@@ -1,15 +1,17 @@
 use crate::{
     agent::Agent, aio::Aio, channel::Channel, into_the_future, listener::Listener, sftp::Sftp,
+    Error,
 };
 #[cfg(unix)]
 use libc::c_int;
 
 use ssh2::{
-    self, DisconnectCode, Error, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts,
-    MethodType, ScpFileStat,
+    self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
+    ScpFileStat,
 };
 use std::{
     cell::Ref,
+    convert::From,
     future::Future,
     io,
     net::TcpStream,
@@ -75,10 +77,11 @@ impl Session {
     }
 
     /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
-    pub fn set_tcp_stream(&mut self, stream: TcpStream) {
-        let aio = Aio::new(stream.as_raw_fd(), self.inner.clone());
+    pub fn set_tcp_stream(&mut self, stream: TcpStream) -> Result<(), Error> {
+        let aio = Aio::new(stream.as_raw_fd(), self.inner.clone())?;
         self.aio = Arc::new(Some(aio));
         self.inner.set_tcp_stream(stream);
+        Ok(())
     }
 
     /// See [`tcp_stream`](ssh2::Session::tcp_stream).
@@ -171,7 +174,7 @@ impl Session {
 
     /// See [`supported_algs`](ssh2::Session::supported_algs).
     pub fn supported_algs(&self, method_type: MethodType) -> Result<Vec<&'static str>, Error> {
-        self.inner.supported_algs(method_type)
+        self.inner.supported_algs(method_type).map_err(From::from)
     }
 
     /// See [`agent`](ssh2::Session::agent).
@@ -182,7 +185,7 @@ impl Session {
 
     /// See [`known_hosts`](ssh2::Session::known_hosts).
     pub fn known_hosts(&self) -> Result<KnownHosts, Error> {
-        self.inner.known_hosts()
+        self.inner.known_hosts().map_err(From::from)
     }
 
     /// See [`channel_session`](ssh2::Session::channel_session).
@@ -302,6 +305,6 @@ impl Session {
 
     /// See [`rc`](ssh2::Session::rc).
     pub fn rc(&self, rc: c_int) -> Result<(), Error> {
-        self.inner.rc(rc)
+        self.inner.rc(rc).map_err(From::from)
     }
 }

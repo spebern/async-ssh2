@@ -27,7 +27,7 @@ pub async fn authed_session() -> async_ssh2::Session {
     let user = env::var("USER").unwrap();
     let socket = socket();
     let mut sess = async_ssh2::Session::new().unwrap();
-    sess.set_tcp_stream(socket);
+    sess.set_tcp_stream(socket).unwrap();
     sess.handshake().await.unwrap();
     assert!(!sess.authenticated());
 

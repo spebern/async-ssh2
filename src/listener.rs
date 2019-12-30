@@ -1,5 +1,5 @@
-use crate::{aio::Aio, channel::Channel, into_the_future};
-use ssh2::{self, Error};
+use crate::{aio::Aio, channel::Channel, into_the_future, Error};
+use ssh2::{self};
 use std::{
     future::Future,
     io,

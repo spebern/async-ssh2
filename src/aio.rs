@@ -1,4 +1,4 @@
-use crate::BlockDirections;
+use crate::{BlockDirections, Error};
 use mio::{event::Evented, unix::EventedFd, Poll, PollOpt, Ready, Token};
 use ssh2::Session;
 use std::{io, os::unix, task::Context};
@@ -10,12 +10,11 @@ pub struct Aio {
 }
 
 impl Aio {
-    pub fn new(fd: unix::io::RawFd, session: Session) -> Self {
-        Self {
-            // TODO get rid of unwrap
-            poll_evented: PollEvented::new(RawFd(fd)).unwrap(),
+    pub fn new(fd: unix::io::RawFd, session: Session) -> Result<Self, Error> {
+        Ok(Self {
+            poll_evented: PollEvented::new(RawFd(fd))?,
             session,
-        }
+        })
     }
 
     pub fn set_waker(&self, ctx: &mut Context<'_>) -> io::Result<()> {

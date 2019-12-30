@@ -1,6 +1,7 @@
-use crate::{aio::Aio, into_the_future};
-use ssh2::{self, Error, Identities, PublicKey};
+use crate::{aio::Aio, into_the_future, Error};
+use ssh2::{self, Identities, PublicKey};
 use std::{
+    convert::From,
     future::Future,
     io,
     pin::Pin,
@@ -33,7 +34,7 @@ impl Agent {
 
     /// See [`list_identities`](ssh2::Agent::list_identities).
     pub fn list_identities(&mut self) -> Result<(), Error> {
-        self.inner.list_identities()
+        self.inner.list_identities().map_err(From::from)
     }
 
     /// See [`identities`](ssh2::Agent::identities).

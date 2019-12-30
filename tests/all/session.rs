@@ -41,7 +41,7 @@ async fn smoke_handshake() {
     let user = env::var("USER").unwrap();
     let socket = crate::socket();
     let mut sess = Session::new().unwrap();
-    sess.set_tcp_stream(socket);
+    sess.set_tcp_stream(socket).unwrap();
     sess.handshake().await.unwrap();
     sess.host_key().unwrap();
     let methods = sess.auth_methods(&user).await.unwrap();
