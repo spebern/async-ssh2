@@ -1,4 +1,3 @@
-// TODO get rid of -37
 #[macro_export]
 macro_rules! into_the_future {
     ($aio:ident; $cb:expr) => {{
