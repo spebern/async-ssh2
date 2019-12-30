@@ -22,4 +22,4 @@ mio = { version = "0.6.21" }
 libc = "0.2"
 
 [dev-dependencies]
-tempdir = "0.3"
+tempfile = "3.1"

@@ -1,7 +1,7 @@
 use async_ssh2::Session;
 use ssh2::{HashType, MethodType};
 use std::{env, fs::File, io::prelude::*, path::Path};
-use tempdir::TempDir;
+use tempfile::tempdir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // TODO
@@ -166,7 +166,7 @@ async fn scp_recv() {
 
 #[tokio::test]
 async fn scp_send() {
-    let td = TempDir::new("test").unwrap();
+    let td = tempdir().unwrap();
     let sess = crate::authed_session().await;
     let mut ch = sess
         .scp_send(&td.path().join("foo"), 0o644, 6, None)

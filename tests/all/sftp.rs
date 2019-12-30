@@ -1,10 +1,9 @@
 // TODO this won't work because async drop is not handled
-/*
 use std::{
     fs::{self, File},
     io::prelude::*,
 };
-use tempdir::TempDir;
+use tempfile::tempdir;
 use tokio::{
     self,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -18,7 +17,7 @@ async fn smoke() {
 
 #[tokio::test]
 async fn ops() {
-    let td = TempDir::new("foo").unwrap();
+    let td = tempdir().unwrap();
     File::create(&td.path().join("foo")).unwrap();
     fs::create_dir(&td.path().join("bar")).unwrap();
 
@@ -61,7 +60,6 @@ async fn ops() {
     let realpath = sftp.realpath(&td.path().join("foo2")).await.unwrap();
     assert_eq!(realpath, td.path().join("foo").canonicalize().unwrap());
 
-    let files = sftp.readdir(td.path()).await.unwrap();
+    let files = sftp.readdir(&td.path()).await.unwrap();
     assert_eq!(files.len(), 4);
 }
-*/

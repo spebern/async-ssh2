@@ -1,7 +1,7 @@
 //#![deny(warnings)]
 
 extern crate async_ssh2;
-extern crate tempdir;
+extern crate tempfile;
 
 use std::{env, net::TcpStream};
 

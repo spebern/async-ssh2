@@ -64,9 +64,27 @@ impl Sftp {
     }
 
     /// See [`readdir`](ssh2::Sftp::readdir).
-    pub async fn readdir(&self, dirname: &Path) -> Result<Vec<(PathBuf, ssh2::FileStat)>, Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.readdir(dirname) })
+    pub async fn readdir(&self, dirname: &Path) -> Result<Vec<(PathBuf, FileStat)>, Error> {
+        let mut dir = self.opendir(dirname).await?;
+        let mut ret = Vec::new();
+        loop {
+            match dir.readdir().await {
+                Ok((filename, stat)) => {
+                    if &*filename == Path::new(".") || &*filename == Path::new("..") {
+                        continue;
+                    }
+
+                    ret.push((dirname.join(&filename), stat))
+                }
+                Err(Error::SSH2(ref e)) if e.code() == -16 => {
+                    break;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(ret)
     }
 
     /// See [`mkdir`](ssh2::Sftp::mkdir).
