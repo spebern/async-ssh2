@@ -1,6 +1,6 @@
 use crate::{aio::Aio, into_the_future, Error};
 use libc::c_int;
-use ssh2::{self, FileStat};
+use ssh2::{self, FileStat, OpenFlags, OpenType};
 use std::{
     convert::From,
     future::Future,
@@ -44,23 +44,25 @@ impl Sftp {
 
     /// See [`open`](ssh2::Sftp::open).
     pub async fn open(&self, filename: &Path) -> Result<File<'_>, Error> {
-        let aio = self.aio.clone();
-        let file = into_the_future!(aio; &mut || { self.inner.open(filename) })?;
-        Ok(File::new(file, self.aio.clone()))
+        self.open_mode(filename, OpenFlags::READ, 0o644, OpenType::File)
+            .await
     }
 
     /// See [`create`](ssh2::Sftp::create).
     pub async fn create(&self, filename: &Path) -> Result<File<'_>, Error> {
-        let aio = self.aio.clone();
-        let file = into_the_future!(aio; &mut || { self.inner.create(filename) })?;
-        Ok(File::new(file, self.aio.clone()))
+        self.open_mode(
+            filename,
+            OpenFlags::WRITE | OpenFlags::TRUNCATE,
+            0o644,
+            OpenType::File,
+        )
+        .await
     }
 
     /// See [`opendir`](ssh2::Sftp::opendir).
     pub async fn opendir(&self, dirname: &Path) -> Result<File<'_>, Error> {
-        let aio = self.aio.clone();
-        let file = into_the_future!(aio; &mut || { self.inner.opendir(dirname) })?;
-        Ok(File::new(file, self.aio.clone()))
+        self.open_mode(dirname, OpenFlags::READ, 0, OpenType::Dir)
+            .await
     }
 
     /// See [`readdir`](ssh2::Sftp::readdir).
