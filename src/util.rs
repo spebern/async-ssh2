@@ -12,7 +12,10 @@ macro_rules! into_the_future {
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 match (&mut self.cb)() {
-                    Err(e) if e.code() == -37 => {
+                    Err(e)
+                        if io::Error::from(Error::from_errno(e.code())).kind()
+                            == io::ErrorKind::WouldBlock =>
+                    {
                         if let Some(ref aio) = *self.aio {
                             // TODO get rid of unwrap
                             aio.set_waker(cx).unwrap();

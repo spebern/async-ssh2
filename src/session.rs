@@ -11,6 +11,7 @@ use ssh2::{
 use std::{
     cell::Ref,
     future::Future,
+    io,
     net::TcpStream,
     os::unix::io::AsRawFd,
     path::Path,

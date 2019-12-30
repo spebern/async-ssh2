@@ -1,8 +1,8 @@
 use crate::{aio::Aio, into_the_future};
-
 use ssh2::{self, Error, Identities, PublicKey};
 use std::{
     future::Future,
+    io,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},

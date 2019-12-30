@@ -1,5 +1,4 @@
 use crate::{aio::Aio, into_the_future};
-
 use ssh2::{self, Error, ExitSignal, ExtendedData, PtyModes, ReadWindow, Stream, WriteWindow};
 use std::{
     future::Future,
