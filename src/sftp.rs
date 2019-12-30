@@ -1,6 +1,6 @@
-use crate::{into_the_future, io::Io};
+use crate::{aio::Aio, into_the_future};
 use libc::c_int;
-use mio::Ready;
+
 use ssh2::{self, Error, FileStat};
 use std::{
     future::Future,
@@ -10,14 +10,14 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::io::{AsyncRead, AsyncWrite, PollEvented};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// A handle to a remote filesystem over SFTP.
 ///
 /// Instances are created through the `sftp` method on a `Session`.
 pub struct Sftp {
     inner: ssh2::Sftp,
-    poll_evented: Arc<Option<PollEvented<Io>>>,
+    aio: Arc<Option<Aio>>,
 }
 
 /// A file handle to an SFTP connection.
@@ -29,19 +29,12 @@ pub struct Sftp {
 /// of `Sftp`.
 pub struct File<'sftp> {
     inner: ssh2::File<'sftp>,
-    poll_evented: Arc<Option<PollEvented<Io>>>,
+    aio: Arc<Option<Aio>>,
 }
 
 impl Sftp {
-    pub(crate) fn new(sftp: ssh2::Sftp, poll_evented: Arc<Option<PollEvented<Io>>>) -> Self {
-        Self {
-            inner: sftp,
-            poll_evented,
-        }
-    }
-
-    pub(crate) fn poll_evented(&self) -> Arc<Option<PollEvented<Io>>> {
-        self.poll_evented.clone()
+    pub(crate) fn new(sftp: ssh2::Sftp, aio: Arc<Option<Aio>>) -> Self {
+        Self { inner: sftp, aio }
     }
 
     /// Open a handle to a file.
@@ -52,30 +45,30 @@ impl Sftp {
         mode: i32,
         open_type: ssh2::OpenType,
     ) -> Result<File<'_>, Error> {
-        let poll_evented = self.poll_evented();
-        let file = into_the_future!(poll_evented; &mut || { self.inner.open_mode(filename, flags, mode, open_type) })?;
-        Ok(File::new(file, self.poll_evented()))
+        let aio = self.aio.clone();
+        let file = into_the_future!(aio; &mut || { self.inner.open_mode(filename, flags, mode, open_type) })?;
+        Ok(File::new(file, self.aio.clone()))
     }
 
     /// Helper to open a file in the `Read` mode.
     pub async fn open(&self, filename: &Path) -> Result<File<'_>, Error> {
-        let poll_evented = self.poll_evented();
-        let file = into_the_future!(poll_evented; &mut || { self.inner.open(filename) })?;
-        Ok(File::new(file, self.poll_evented()))
+        let aio = self.aio.clone();
+        let file = into_the_future!(aio; &mut || { self.inner.open(filename) })?;
+        Ok(File::new(file, self.aio.clone()))
     }
 
     /// Helper to create a file in write-only mode with truncation.
     pub async fn create(&self, filename: &Path) -> Result<File<'_>, Error> {
-        let poll_evented = self.poll_evented();
-        let file = into_the_future!(poll_evented; &mut || { self.inner.create(filename) })?;
-        Ok(File::new(file, self.poll_evented()))
+        let aio = self.aio.clone();
+        let file = into_the_future!(aio; &mut || { self.inner.create(filename) })?;
+        Ok(File::new(file, self.aio.clone()))
     }
 
     /// Helper to open a directory for reading its contents.
     pub async fn opendir(&self, dirname: &Path) -> Result<File<'_>, Error> {
-        let poll_evented = self.poll_evented();
-        let file = into_the_future!(poll_evented; &mut || { self.inner.opendir(dirname) })?;
-        Ok(File::new(file, self.poll_evented()))
+        let aio = self.aio.clone();
+        let file = into_the_future!(aio; &mut || { self.inner.opendir(dirname) })?;
+        Ok(File::new(file, self.aio.clone()))
     }
 
     /// Convenience function to read the files in a directory.
@@ -83,56 +76,56 @@ impl Sftp {
     /// The returned paths are all joined with `dirname` when returned, and the
     /// paths `.` and `..` are filtered out of the returned list.
     pub async fn readdir(&self, dirname: &Path) -> Result<Vec<(PathBuf, ssh2::FileStat)>, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.readdir(dirname) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.readdir(dirname) })
     }
 
     /// Create a directory on the remote file system.
     pub async fn mkdir(&self, filename: &Path, mode: i32) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.mkdir(filename, mode) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.mkdir(filename, mode) })
     }
 
     /// Remove a directory from the remote file system.
     pub async fn rmdir(&self, filename: &Path) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.rmdir(filename) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.rmdir(filename) })
     }
 
     /// Get the metadata for a file, performed by stat(2)
     pub async fn stat(&self, filename: &Path) -> Result<ssh2::FileStat, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.stat(filename) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.stat(filename) })
     }
 
     /// Get the metadata for a file, performed by lstat(2)
     pub async fn lstat(&self, filename: &Path) -> Result<ssh2::FileStat, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.lstat(filename) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.lstat(filename) })
     }
 
     /// Set the metadata for a file.
     pub async fn setstat(&self, filename: &Path, stat: ssh2::FileStat) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.setstat(filename, stat.clone()) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.setstat(filename, stat.clone()) })
     }
 
     /// Create a symlink at `target` pointing at `path`.
     pub async fn symlink(&self, path: &Path, target: &Path) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.symlink(path, target) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.symlink(path, target) })
     }
 
     /// Read a symlink at `path`.
     pub async fn readlink(&self, path: &Path) -> Result<PathBuf, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.readlink(path) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.readlink(path) })
     }
 
     /// Resolve the real path for `path`.
     pub async fn realpath(&self, path: &Path) -> Result<PathBuf, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.realpath(path) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.realpath(path) })
     }
 
     /// Rename a filesystem object on the remote filesystem.
@@ -153,14 +146,14 @@ impl Sftp {
         dst: &Path,
         flags: Option<ssh2::RenameFlags>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.rename(src, dst, flags) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.rename(src, dst, flags) })
     }
 
     /// Remove a file on the remote filesystem
     pub async fn unlink(&self, file: &Path) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.unlink(file) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.unlink(file) })
     }
 
     /// Peel off the last error to happen on this SFTP instance.
@@ -175,27 +168,20 @@ impl Sftp {
 }
 
 impl<'sftp> File<'sftp> {
-    pub(crate) fn new(file: ssh2::File<'sftp>, poll_evented: Arc<Option<PollEvented<Io>>>) -> Self {
-        Self {
-            inner: file,
-            poll_evented,
-        }
-    }
-
-    pub(crate) fn poll_evented(&self) -> Arc<Option<PollEvented<Io>>> {
-        self.poll_evented.clone()
+    pub(crate) fn new(file: ssh2::File<'sftp>, aio: Arc<Option<Aio>>) -> Self {
+        Self { inner: file, aio }
     }
 
     /// Set the metadata for this handle.
     pub async fn setstat(&mut self, stat: FileStat) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.setstat(stat.clone()) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.setstat(stat.clone()) })
     }
 
     /// Get the metadata for this handle.
     pub async fn stat(&mut self) -> Result<FileStat, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.stat() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.stat() })
     }
 
     #[allow(missing_docs)]
@@ -203,8 +189,8 @@ impl<'sftp> File<'sftp> {
     // TODO
     /*
     pub async fn statvfs(&mut self) -> Result<raw::LIBSSH2_SFTP_STATVFS, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.statvfs() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.statvfs() })
     }
     */
 
@@ -219,8 +205,8 @@ impl<'sftp> File<'sftp> {
     /// Also note that the return paths will not be absolute paths, they are
     /// the filenames of the files in this directory.
     pub async fn readdir(&mut self) -> Result<(PathBuf, FileStat), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.readdir() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.readdir() })
     }
 
     /// This function causes the remote server to synchronize the file data and
@@ -228,8 +214,8 @@ impl<'sftp> File<'sftp> {
     ///
     /// For this to work requires fsync@openssh.com support on the server.
     pub async fn fsync(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.fsync() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.fsync() })
     }
 }
 
@@ -239,13 +225,12 @@ impl<'sftp> AsyncRead for File<'sftp> {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.read(buf);
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }
@@ -262,13 +247,12 @@ impl<'sftp> AsyncWrite for File<'sftp> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.write(buf);
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }
@@ -279,13 +263,12 @@ impl<'sftp> AsyncWrite for File<'sftp> {
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.flush();
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }

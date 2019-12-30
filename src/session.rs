@@ -1,29 +1,23 @@
 use crate::{
-    agent::Agent, channel::Channel, into_the_future, io::Io, listener::Listener, sftp::Sftp,
+    agent::Agent, aio::Aio, channel::Channel, into_the_future, listener::Listener, sftp::Sftp,
 };
 #[cfg(unix)]
-use libc::size_t;
-use libc::{self, c_char, c_int, c_long, c_uint, c_void};
-use mio::Ready;
+use libc::c_int;
+
 use ssh2::{
-    self, BlockDirections, DisconnectCode, Error, HashType, HostKeyType, KeyboardInteractivePrompt,
-    KnownHosts, MethodType, ScpFileStat,
+    self, DisconnectCode, Error, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts,
+    MethodType, ScpFileStat,
 };
 use std::{
-    borrow::Cow,
-    cell::{Ref, RefCell},
-    ffi::CString,
+    cell::Ref,
     future::Future,
-    mem,
     net::TcpStream,
     os::unix::io::AsRawFd,
-    path::{Path, PathBuf},
+    path::Path,
     pin::Pin,
-    slice, str,
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::io::PollEvented;
 
 /// An SSH session, typically representing one TCP connection.
 ///
@@ -32,7 +26,7 @@ use tokio::io::PollEvented;
 /// (via the `set_tcp_stream` method).
 pub struct Session {
     inner: ssh2::Session,
-    poll_evented: Arc<Option<PollEvented<Io>>>,
+    aio: Arc<Option<Aio>>,
 }
 
 impl Session {
@@ -49,12 +43,8 @@ impl Session {
         session.set_blocking(false);
         Ok(Self {
             inner: session,
-            poll_evented: Arc::new(None),
+            aio: Arc::new(None),
         })
-    }
-
-    fn poll_evented(&self) -> Arc<Option<PollEvented<Io>>> {
-        self.poll_evented.clone()
     }
 
     /// Set the SSH protocol banner for the local client
@@ -64,8 +54,8 @@ impl Session {
     /// corresponding to the protocol and libssh2 version will be sent by
     /// default.
     pub async fn set_banner(&self, banner: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.set_banner(banner) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.set_banner(banner) })
     }
 
     /// Flag indicating whether SIGPIPE signals will be allowed or blocked.
@@ -118,8 +108,8 @@ impl Session {
     /// You must call this after associating the session with a tcp stream
     /// via the `set_tcp_stream` function.
     pub async fn handshake(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.handshake() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.handshake() })
     }
 
     /// The session takes ownership of the socket provided.
@@ -130,7 +120,8 @@ impl Session {
     /// concurrently elsewhere for the duration of this session as it may
     /// interfere with the protocol.
     pub fn set_tcp_stream(&mut self, stream: TcpStream) {
-        self.poll_evented = Arc::new(Some(PollEvented::new(Io::new(stream.as_raw_fd())).unwrap()));
+        let aio = Aio::new(stream.as_raw_fd(), self.inner.clone());
+        self.aio = Arc::new(Some(aio));
         self.inner.set_tcp_stream(stream);
     }
 
@@ -147,8 +138,8 @@ impl Session {
     /// authentication (routed via PAM or another authentication backed)
     /// instead.
     pub async fn userauth_password(&self, username: &str, password: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.userauth_password(username, password) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.userauth_password(username, password) })
     }
 
     /// Attempt keyboard interactive authentication.
@@ -156,8 +147,8 @@ impl Session {
     /// You must supply a callback function to
     pub fn userauth_keyboard_interactive<P: KeyboardInteractivePrompt>(
         &self,
-        username: &str,
-        prompter: &mut P,
+        _username: &str,
+        _prompter: &mut P,
     ) -> Result<(), Error> {
         todo!();
     }
@@ -169,8 +160,8 @@ impl Session {
     /// control is needed than this method offers, it is recommended to use
     /// `agent` directly to control how the identity is found.
     pub async fn userauth_agent(&self, username: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.userauth_agent(username) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.userauth_agent(username) })
     }
 
     /// Attempt public key authentication using a PEM encoded private key file
@@ -182,8 +173,8 @@ impl Session {
         privatekey: &Path,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.userauth_pubkey_file(username, pubkey, privatekey, passphrase) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.userauth_pubkey_file(username, pubkey, privatekey, passphrase) })
     }
 
     /// Attempt public key authentication using a PEM encoded private key from
@@ -199,8 +190,8 @@ impl Session {
         privatekeydata: &str,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.userauth_pubkey_memory(username, pubkeydata, privatekeydata, passphrase) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.userauth_pubkey_memory(username, pubkeydata, privatekeydata, passphrase) })
     }
 
     // Umm... I wish this were documented in libssh2?
@@ -214,8 +205,8 @@ impl Session {
         hostname: &str,
         local_username: Option<&str>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.userauth_hostbased_file(username, publickey, privatekey, passphrase, hostname, local_username) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.userauth_hostbased_file(username, publickey, privatekey, passphrase, hostname, local_username) })
     }
 
     /// Indicates whether or not the named session has been successfully
@@ -236,8 +227,8 @@ impl Session {
     /// The return value is a comma-separated string of supported auth schemes,
     /// and may be an empty string.
     pub async fn auth_methods(&self, username: &str) -> Result<&str, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.auth_methods(username) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.auth_methods(username) })
     }
 
     /// Set preferred key exchange method
@@ -248,8 +239,8 @@ impl Session {
     /// will be ignored and not sent to the remote host during protocol
     /// negotiation.
     pub async fn method_pref(&self, method_type: MethodType, prefs: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.method_pref(method_type, prefs) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.method_pref(method_type, prefs) })
     }
 
     /// Return the currently active algorithms.
@@ -270,7 +261,7 @@ impl Session {
     /// The returned agent will still need to be connected manually before use.
     pub fn agent(&self) -> Result<Agent, Error> {
         let agent = self.inner.agent()?;
-        Ok(Agent::new(agent, self.poll_evented()))
+        Ok(Agent::new(agent, self.aio.clone()))
     }
 
     /// Init a collection of known hosts for this session.
@@ -286,9 +277,9 @@ impl Session {
     /// This method is commonly used to create a channel to execute commands
     /// over or create a new login shell.
     pub async fn channel_session(&self) -> Result<Channel, Error> {
-        let poll_evented = self.poll_evented();
-        let channel = into_the_future!(poll_evented; &mut || { self.inner.channel_session() })?;
-        Ok(Channel::new(channel, self.poll_evented()))
+        let aio = self.aio.clone();
+        let channel = into_the_future!(aio; &mut || { self.inner.channel_session() })?;
+        Ok(Channel::new(channel, self.aio.clone()))
     }
 
     /// Tunnel a TCP connection through an SSH session.
@@ -309,9 +300,10 @@ impl Session {
         port: u16,
         src: Option<(&str, u16)>,
     ) -> Result<Channel, Error> {
-        let poll_evented = self.poll_evented();
-        let channel = into_the_future!(poll_evented; &mut || { self.inner.channel_direct_tcpip(host, port, src) })?;
-        Ok(Channel::new(channel, self.poll_evented()))
+        let aio = self.aio.clone();
+        let channel =
+            into_the_future!(aio; &mut || { self.inner.channel_direct_tcpip(host, port, src) })?;
+        Ok(Channel::new(channel, self.aio.clone()))
     }
 
     /// Instruct the remote SSH server to begin listening for inbound TCP/IP
@@ -325,9 +317,9 @@ impl Session {
         host: Option<&str>,
         queue_maxsize: Option<u32>,
     ) -> Result<(Listener, u16), Error> {
-        let poll_evented = self.poll_evented();
-        let (listener, port) = into_the_future!(poll_evented; &mut || { self.inner.channel_forward_listen(remote_port, host, queue_maxsize) })?;
-        Ok((Listener::new(listener, self.poll_evented()), port))
+        let aio = self.aio.clone();
+        let (listener, port) = into_the_future!(aio; &mut || { self.inner.channel_forward_listen(remote_port, host, queue_maxsize) })?;
+        Ok((Listener::new(listener, self.aio.clone()), port))
     }
 
     /// Request a file from the remote host via SCP.
@@ -336,10 +328,9 @@ impl Session {
     /// sent over the returned channel. Some stat information is also returned
     /// about the remote file to prepare for receiving the file.
     pub async fn scp_recv(&self, path: &Path) -> Result<(Channel, ScpFileStat), Error> {
-        let poll_evented = self.poll_evented();
-        let (channel, file_stat) =
-            into_the_future!(poll_evented; &mut || { self.inner.scp_recv(path) })?;
-        Ok((Channel::new(channel, self.poll_evented()), file_stat))
+        let aio = self.aio.clone();
+        let (channel, file_stat) = into_the_future!(aio; &mut || { self.inner.scp_recv(path) })?;
+        Ok((Channel::new(channel, self.aio.clone()), file_stat))
     }
 
     /// Send a file to the remote host via SCP.
@@ -357,9 +348,10 @@ impl Session {
         size: u64,
         times: Option<(u64, u64)>,
     ) -> Result<Channel, Error> {
-        let poll_evented = self.poll_evented();
-        let channel = into_the_future!(poll_evented; &mut || { self.inner.scp_send(remote_path, mode, size, times) })?;
-        Ok(Channel::new(channel, self.poll_evented()))
+        let aio = self.aio.clone();
+        let channel =
+            into_the_future!(aio; &mut || { self.inner.scp_send(remote_path, mode, size, times) })?;
+        Ok(Channel::new(channel, self.aio.clone()))
     }
 
     /// Open a channel and initialize the SFTP subsystem.
@@ -369,9 +361,9 @@ impl Session {
     /// own unique binary packet protocol which must be managed with the
     /// methods on `Sftp`.
     pub async fn sftp(&self) -> Result<Sftp, Error> {
-        let poll_evented = self.poll_evented();
-        let sftp = into_the_future!(poll_evented; &mut || { self.inner.sftp() })?;
-        Ok(Sftp::new(sftp, self.poll_evented()))
+        let aio = self.aio.clone();
+        let sftp = into_the_future!(aio; &mut || { self.inner.sftp() })?;
+        Ok(Sftp::new(sftp, self.aio.clone()))
     }
 
     /// Allocate a new channel for exchanging data with the server.
@@ -385,9 +377,9 @@ impl Session {
         packet_size: u32,
         message: Option<&str>,
     ) -> Result<Channel, Error> {
-        let poll_evented = self.poll_evented();
-        let channel = into_the_future!(poll_evented; &mut || { self.inner.channel_open(channel_type, window_size, packet_size, message) })?;
-        Ok(Channel::new(channel, self.poll_evented()))
+        let aio = self.aio.clone();
+        let channel = into_the_future!(aio; &mut || { self.inner.channel_open(channel_type, window_size, packet_size, message) })?;
+        Ok(Channel::new(channel, self.aio.clone()))
     }
 
     /// Get the remote banner
@@ -440,8 +432,8 @@ impl Session {
     /// Returns how many seconds you can sleep after this call before you need
     /// to call it again.
     pub async fn keepalive_send(&self) -> Result<u32, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.keepalive_send() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.keepalive_send() })
     }
 
     /// Terminate the transport layer.
@@ -456,20 +448,12 @@ impl Session {
         description: &str,
         lang: Option<&str>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.disconnect(reason, description, lang) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.disconnect(reason, description, lang) })
     }
 
     /// Translate a return code into a Rust-`Result`.
     pub fn rc(&self, rc: c_int) -> Result<(), Error> {
         self.inner.rc(rc)
-    }
-
-    /// Returns the blocked io directions that the application needs to wait for.
-    ///
-    /// This function should be used after an error of type `WouldBlock` is returned to
-    /// find out the socket events the application has to wait for.
-    pub fn block_directions(&self) -> BlockDirections {
-        self.inner.block_directions()
     }
 }

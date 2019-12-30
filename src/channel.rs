@@ -1,19 +1,15 @@
-use crate::{into_the_future, io::Io};
-use mio::Ready;
-use ssh2::{
-    self, Error, ExitSignal, ExtendedData, Identities, PtyModes, PublicKey, ReadWindow, Stream,
-    WriteWindow,
-};
+use crate::{aio::Aio, into_the_future};
+
+use ssh2::{self, Error, ExitSignal, ExtendedData, PtyModes, ReadWindow, Stream, WriteWindow};
 use std::{
     future::Future,
     io,
     io::{Read, Write},
-    path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::io::{AsyncRead, AsyncWrite, PollEvented};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// A channel represents a portion of an SSH connection on which data can be
 /// read and written.
@@ -25,19 +21,15 @@ use tokio::io::{AsyncRead, AsyncWrite, PollEvented};
 /// flag on a channel's corresponding `Session`.
 pub struct Channel {
     inner: ssh2::Channel,
-    poll_evented: Arc<Option<PollEvented<Io>>>,
+    aio: Arc<Option<Aio>>,
 }
 
 impl Channel {
-    pub(crate) fn new(channel: ssh2::Channel, poll_evented: Arc<Option<PollEvented<Io>>>) -> Self {
+    pub(crate) fn new(channel: ssh2::Channel, aio: Arc<Option<Aio>>) -> Self {
         Self {
             inner: channel,
-            poll_evented,
+            aio,
         }
-    }
-
-    fn poll_evented(&self) -> Arc<Option<PollEvented<Io>>> {
-        self.poll_evented.clone()
     }
 
     /// Set an environment variable in the remote channel's process space.
@@ -45,8 +37,8 @@ impl Channel {
     /// Note that this does not make sense for all channel types and may be
     /// ignored by the server despite returning success.
     pub async fn setenv(&mut self, var: &str, val: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.setenv(var, val) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.setenv(var, val) })
     }
 
     /// Request a PTY on an established channel.
@@ -74,8 +66,8 @@ impl Channel {
         mode: Option<PtyModes>,
         dim: Option<(u32, u32, u32, u32)>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.request_pty(term, mode.clone(), dim) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.request_pty(term, mode.clone(), dim) })
     }
 
     /// Request that the PTY size be changed to the specified size.
@@ -88,8 +80,8 @@ impl Channel {
         width_px: Option<u32>,
         height_px: Option<u32>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.request_pty_size(width, height, width_px, height_px) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.request_pty_size(width, height, width_px, height_px) })
     }
 
     /// Execute a command
@@ -110,8 +102,8 @@ impl Channel {
     /// println!("{}", s);
     /// ```
     pub async fn exec(&mut self, command: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.exec(command) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.exec(command) })
     }
 
     /// Start a shell
@@ -119,8 +111,8 @@ impl Channel {
     /// A shell is one of the standard process services defined by the SSH2
     /// protocol.
     pub async fn shell(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.shell() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.shell() })
     }
 
     /// Request a subsystem be started.
@@ -128,8 +120,8 @@ impl Channel {
     /// A subsystem is one of the standard process services defined by the SSH2
     /// protocol.
     pub async fn subsystem(&mut self, system: &str) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.subsystem(system) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.subsystem(system) })
     }
 
     /// Initiate a request on a session type channel.
@@ -141,8 +133,8 @@ impl Channel {
         request: &str,
         message: Option<&str>,
     ) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.process_startup(request, message) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.process_startup(request, message) })
     }
 
     /// Get a handle to the stderr stream of this channel.
@@ -167,8 +159,8 @@ impl Channel {
 
     /// Change how extended data (such as stderr) is handled
     pub async fn handle_extended_data(&mut self, mode: ExtendedData) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.handle_extended_data(mode) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.handle_extended_data(mode) })
     }
 
     /// Returns the exit code raised by the process running on the remote host
@@ -203,8 +195,8 @@ impl Channel {
     /// This function returns the new size of the receive window (as understood
     /// by remote end) on success.
     pub async fn adjust_receive_window(&mut self, adjust: u64, force: bool) -> Result<u64, Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.adjust_receive_window(adjust, force) })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.adjust_receive_window(adjust, force) })
     }
 
     /// Artificially limit the number of bytes that will be read from this
@@ -227,8 +219,8 @@ impl Channel {
     ///
     /// Processes typically interpret this as a closed stdin descriptor.
     pub async fn send_eof(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.send_eof() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.send_eof() })
     }
 
     /// Wait for the remote end to send EOF.
@@ -237,8 +229,8 @@ impl Channel {
     /// You should call the eof() function after calling this to check the
     /// status of the channel.
     pub async fn wait_eof(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.wait_eof() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.wait_eof() })
     }
 
     /// Close an active data channel.
@@ -251,8 +243,8 @@ impl Channel {
     /// To wait for the remote end to close its connection as well, follow this
     /// command with `wait_closed`
     pub async fn close(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.close() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.close() })
     }
 
     /// Enter a temporary blocking state until the remote host closes the named
@@ -260,8 +252,8 @@ impl Channel {
     ///
     /// Typically sent after `close` in order to examine the exit status.
     pub async fn wait_close(&mut self) -> Result<(), Error> {
-        let poll_evented = self.poll_evented();
-        into_the_future!(poll_evented; &mut || { self.inner.wait_close() })
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.wait_close() })
     }
 }
 
@@ -271,13 +263,12 @@ impl AsyncRead for Channel {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.read(buf);
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }
@@ -294,13 +285,12 @@ impl AsyncWrite for Channel {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.write(buf);
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }
@@ -311,13 +301,12 @@ impl AsyncWrite for Channel {
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let ready = Ready::readable();
         loop {
             let res = self.inner.flush();
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if let Some(ref poll_evented) = *self.poll_evented {
-                        poll_evented.clear_read_ready(cx, ready).unwrap();
+                    if let Some(ref aio) = *self.aio {
+                        aio.set_waker(cx).unwrap();
                     }
                     return Poll::Pending;
                 }
