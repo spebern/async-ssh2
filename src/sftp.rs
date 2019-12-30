@@ -163,6 +163,12 @@ impl Sftp {
     pub fn rc(&self, rc: c_int) -> Result<(), Error> {
         self.inner.rc(rc).map_err(From::from)
     }
+
+    /// See [`unlink`](ssh2::Sftp::unlink).
+    pub async fn shutdown(mut self) -> Result<(), Error> {
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.shutdown() })
+    }
 }
 
 impl<'sftp> File<'sftp> {
@@ -202,6 +208,12 @@ impl<'sftp> File<'sftp> {
     pub async fn fsync(&mut self) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.fsync() })
+    }
+
+    /// See [`close`](ssh2::File::close).
+    pub async fn close(mut self) -> Result<(), Error> {
+        let aio = self.aio.clone();
+        into_the_future!(aio; &mut || { self.inner.close() })
     }
 }
 

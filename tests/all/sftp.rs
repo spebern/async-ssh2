@@ -52,6 +52,8 @@ async fn ops() {
     foo.read_to_end(&mut v).await.unwrap();
     assert_eq!(v, Vec::new());
 
+    foo.close().await.unwrap();
+
     sftp.symlink(&td.path().join("foo"), &td.path().join("foo2"))
         .await
         .unwrap();
@@ -62,4 +64,6 @@ async fn ops() {
 
     let files = sftp.readdir(&td.path()).await.unwrap();
     assert_eq!(files.len(), 4);
+
+    sftp.shutdown().await.unwrap();
 }
