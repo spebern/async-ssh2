@@ -11,6 +11,9 @@ documentation = "https://docs.rs/async-ssh2"
 description = """Async wrapper over ssh2 ."""
 edition = "2018"
 
+[features]
+vendored-openssl = ["ssh2/vendored-openssl"]
+
 [dependencies]
 #ssh2 = "0.6"
 ssh2 = { git = "https://github.com/spebern/ssh2-rs" }
