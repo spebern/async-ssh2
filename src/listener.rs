@@ -8,10 +8,7 @@ use std::{
     task::{Context, Poll},
 };
 
-/// A listener represents a forwarding port from the remote server.
-///
-/// New channels can be accepted from a listener which represent connections on
-/// the remote server's port.
+/// See [`Listener`](ssh2::Listener).
 pub struct Listener {
     inner: ssh2::Listener,
     aio: Arc<Option<Aio>>,
@@ -25,7 +22,7 @@ impl Listener {
         }
     }
 
-    /// Accept a queued connection from this listener.
+    /// See [`accept`](ssh2::Listener::accept).
     pub async fn accept(&mut self) -> Result<Channel, Error> {
         let aio = self.aio.clone();
         let channel = into_the_future!(aio; &mut || { self.inner.accept() })?;

@@ -1,6 +1,5 @@
 use crate::{aio::Aio, into_the_future};
 use libc::c_int;
-
 use ssh2::{self, Error, FileStat};
 use std::{
     future::Future,
@@ -12,21 +11,13 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
-/// A handle to a remote filesystem over SFTP.
-///
-/// Instances are created through the `sftp` method on a `Session`.
+/// See [`Sftp`](ssh2::Sftp).
 pub struct Sftp {
     inner: ssh2::Sftp,
     aio: Arc<Option<Aio>>,
 }
 
-/// A file handle to an SFTP connection.
-///
-/// Files behave similarly to `std::old_io::File` in that they are readable and
-/// writable and support operations like stat and seek.
-///
-/// Files are created through `open`, `create`, and `open_mode` on an instance
-/// of `Sftp`.
+/// See [`File`](ssh2::File).
 pub struct File<'sftp> {
     inner: ssh2::File<'sftp>,
     aio: Arc<Option<Aio>>,
@@ -37,7 +28,7 @@ impl Sftp {
         Self { inner: sftp, aio }
     }
 
-    /// Open a handle to a file.
+    /// See [`open_mode`](ssh2::Sftp::open_mode).
     pub async fn open_mode(
         &self,
         filename: &Path,
@@ -50,96 +41,82 @@ impl Sftp {
         Ok(File::new(file, self.aio.clone()))
     }
 
-    /// Helper to open a file in the `Read` mode.
+    /// See [`open`](ssh2::Sftp::open).
     pub async fn open(&self, filename: &Path) -> Result<File<'_>, Error> {
         let aio = self.aio.clone();
         let file = into_the_future!(aio; &mut || { self.inner.open(filename) })?;
         Ok(File::new(file, self.aio.clone()))
     }
 
-    /// Helper to create a file in write-only mode with truncation.
+    /// See [`create`](ssh2::Sftp::create).
     pub async fn create(&self, filename: &Path) -> Result<File<'_>, Error> {
         let aio = self.aio.clone();
         let file = into_the_future!(aio; &mut || { self.inner.create(filename) })?;
         Ok(File::new(file, self.aio.clone()))
     }
 
-    /// Helper to open a directory for reading its contents.
+    /// See [`opendir`](ssh2::Sftp::opendir).
     pub async fn opendir(&self, dirname: &Path) -> Result<File<'_>, Error> {
         let aio = self.aio.clone();
         let file = into_the_future!(aio; &mut || { self.inner.opendir(dirname) })?;
         Ok(File::new(file, self.aio.clone()))
     }
 
-    /// Convenience function to read the files in a directory.
-    ///
-    /// The returned paths are all joined with `dirname` when returned, and the
-    /// paths `.` and `..` are filtered out of the returned list.
+    /// See [`readdir`](ssh2::Sftp::readdir).
     pub async fn readdir(&self, dirname: &Path) -> Result<Vec<(PathBuf, ssh2::FileStat)>, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.readdir(dirname) })
     }
 
-    /// Create a directory on the remote file system.
+    /// See [`mkdir`](ssh2::Sftp::mkdir).
     pub async fn mkdir(&self, filename: &Path, mode: i32) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.mkdir(filename, mode) })
     }
 
-    /// Remove a directory from the remote file system.
+    /// See [`rmdir`](ssh2::Sftp::rmdir).
     pub async fn rmdir(&self, filename: &Path) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.rmdir(filename) })
     }
 
-    /// Get the metadata for a file, performed by stat(2)
+    /// See [`stat`](ssh2::Sftp::stat).
     pub async fn stat(&self, filename: &Path) -> Result<ssh2::FileStat, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.stat(filename) })
     }
 
-    /// Get the metadata for a file, performed by lstat(2)
+    /// See [`lstat`](ssh2::Sftp::lstat).
     pub async fn lstat(&self, filename: &Path) -> Result<ssh2::FileStat, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.lstat(filename) })
     }
 
-    /// Set the metadata for a file.
+    /// See [`setstat`](ssh2::Sftp::setstat).
     pub async fn setstat(&self, filename: &Path, stat: ssh2::FileStat) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.setstat(filename, stat.clone()) })
     }
 
-    /// Create a symlink at `target` pointing at `path`.
+    /// See [`symlink`](ssh2::Sftp::symlink).
     pub async fn symlink(&self, path: &Path, target: &Path) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.symlink(path, target) })
     }
 
-    /// Read a symlink at `path`.
+    /// See [`readlink`](ssh2::Sftp::readlink).
     pub async fn readlink(&self, path: &Path) -> Result<PathBuf, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.readlink(path) })
     }
 
-    /// Resolve the real path for `path`.
+    /// See [`realpath`](ssh2::Sftp::realpath).
     pub async fn realpath(&self, path: &Path) -> Result<PathBuf, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.realpath(path) })
     }
 
-    /// Rename a filesystem object on the remote filesystem.
-    ///
-    /// The semantics of this command typically include the ability to move a
-    /// filesystem object between folders and/or filesystem mounts. If the
-    /// `Overwrite` flag is not set and the destfile entry already exists, the
-    /// operation will fail.
-    ///
-    /// Use of the other flags (Native or Atomic) indicate a preference (but
-    /// not a requirement) for the remote end to perform an atomic rename
-    /// operation and/or using native system calls when possible.
-    ///
-    /// If no flags are specified then all flags are used.
+    /// See [`rename`](ssh2::Sftp::rename).
     pub async fn rename(
         &self,
         src: &Path,
@@ -150,18 +127,18 @@ impl Sftp {
         into_the_future!(aio; &mut || { self.inner.rename(src, dst, flags) })
     }
 
-    /// Remove a file on the remote filesystem
+    /// See [`unlink`](ssh2::Sftp::unlink).
     pub async fn unlink(&self, file: &Path) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.unlink(file) })
     }
 
-    /// Peel off the last error to happen on this SFTP instance.
+    /// See [`last_error`](ssh2::Sftp::last_error).
     pub fn last_error(&self) -> Error {
         self.inner.last_error()
     }
 
-    /// Translates a return code into a Rust-`Result`
+    /// See [`rc`](ssh2::Sftp::rc).
     pub fn rc(&self, rc: c_int) -> Result<(), Error> {
         self.inner.rc(rc)
     }
@@ -172,20 +149,20 @@ impl<'sftp> File<'sftp> {
         Self { inner: file, aio }
     }
 
-    /// Set the metadata for this handle.
+    /// See [`setstat`](ssh2::File::setstat).
     pub async fn setstat(&mut self, stat: FileStat) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.setstat(stat.clone()) })
     }
 
-    /// Get the metadata for this handle.
+    /// See [`stat`](ssh2::File::stat).
     pub async fn stat(&mut self) -> Result<FileStat, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.stat() })
     }
 
     #[allow(missing_docs)]
-    // sure wish I knew what this did...
+    /// See [`statvfs`](ssh2::File::statvfs).
     // TODO
     /*
     pub async fn statvfs(&mut self) -> Result<raw::LIBSSH2_SFTP_STATVFS, Error> {
@@ -194,25 +171,13 @@ impl<'sftp> File<'sftp> {
     }
     */
 
-    /// Reads a block of data from a handle and returns file entry information
-    /// for the next entry, if any.
-    ///
-    /// Note that this provides raw access to the `readdir` function from
-    /// libssh2. This will return an error when there are no more files to
-    /// read, and files such as `.` and `..` will be included in the return
-    /// values.
-    ///
-    /// Also note that the return paths will not be absolute paths, they are
-    /// the filenames of the files in this directory.
+    /// See [`readdir`](ssh2::File::readdir).
     pub async fn readdir(&mut self) -> Result<(PathBuf, FileStat), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.readdir() })
     }
 
-    /// This function causes the remote server to synchronize the file data and
-    /// metadata to disk (like fsync(2)).
-    ///
-    /// For this to work requires fsync@openssh.com support on the server.
+    /// See [`fsync`](ssh2::File::fsync).
     pub async fn fsync(&mut self) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.fsync() })
