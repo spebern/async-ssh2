@@ -1,4 +1,3 @@
-// TODO this won't work because async drop is not handled
 use std::{
     fs::{self, File},
     io::prelude::*,
