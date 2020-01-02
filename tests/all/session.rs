@@ -4,8 +4,6 @@ use std::{env, fs::File, io::prelude::*, path::Path};
 use tempfile::tempdir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-// TODO
-/*
 #[test]
 fn session_is_send() {
     fn must_be_send<T: Send>(_: &T) -> bool {
@@ -15,7 +13,6 @@ fn session_is_send() {
     let sess = Session::new().unwrap();
     assert!(must_be_send(&sess));
 }
-*/
 
 #[tokio::test]
 async fn smoke() {

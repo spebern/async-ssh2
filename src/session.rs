@@ -27,6 +27,11 @@ pub struct Session {
     aio: Arc<Option<Aio>>,
 }
 
+// The compiler doesn't know that it is Send safe because of the raw
+// pointer inside.  We know that the way that it is used by libssh2
+// and this crate is Send safe.
+unsafe impl Send for Session {}
+
 impl Session {
     /// See [`new`](ssh2::Session::new).
     pub fn new() -> Result<Session, Error> {
