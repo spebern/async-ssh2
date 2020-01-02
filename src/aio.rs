@@ -1,18 +1,18 @@
 use crate::{BlockDirections, Error};
-use mio::{event::Evented, unix::EventedFd, Poll, PollOpt, Ready, Token};
+use mio::{net::TcpStream, Ready};
 use ssh2::Session;
-use std::{io, os::unix, task::Context};
+use std::{io, task::Context};
 use tokio::io::PollEvented;
 
 pub struct Aio {
-    poll_evented: PollEvented<RawFd>,
+    poll_evented: PollEvented<TcpStream>,
     session: Session,
 }
 
 impl Aio {
-    pub fn new(fd: unix::io::RawFd, session: Session) -> Result<Self, Error> {
+    pub fn new(stream: std::net::TcpStream, session: Session) -> Result<Self, Error> {
         Ok(Self {
-            poll_evented: PollEvented::new(RawFd(fd))?,
+            poll_evented: PollEvented::new(TcpStream::from_stream(stream)?)?,
             session,
         })
     }
@@ -32,33 +32,5 @@ impl Aio {
             BlockDirections::None => {}
         }
         Ok(())
-    }
-}
-
-struct RawFd(unix::io::RawFd);
-
-impl Evented for RawFd {
-    fn register(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        EventedFd(&self.0).register(poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        EventedFd(&self.0).reregister(poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        EventedFd(&self.0).deregister(poll)
     }
 }

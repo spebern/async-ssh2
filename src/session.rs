@@ -15,7 +15,6 @@ use std::{
     future::Future,
     io,
     net::TcpStream,
-    os::unix::io::AsRawFd,
     path::Path,
     pin::Pin,
     sync::Arc,
@@ -78,7 +77,7 @@ impl Session {
 
     /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
     pub fn set_tcp_stream(&mut self, stream: TcpStream) -> Result<(), Error> {
-        let aio = Aio::new(stream.as_raw_fd(), self.inner.clone())?;
+        let aio = Aio::new(stream.try_clone()?, self.inner.clone())?;
         self.aio = Arc::new(Some(aio));
         self.inner.set_tcp_stream(stream);
         Ok(())
