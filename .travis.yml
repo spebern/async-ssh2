@@ -1,0 +1,30 @@
+language: rust
+sudo: required
+
+matrix:
+  include:
+    - rust: 1.39.0
+    - rust: stable
+    - rust: beta
+    - rust: nightly
+
+#    - name: "master doc to gh-pages"
+#     rust: nightly
+#     script:
+#       - cargo doc --no-deps
+#       - cargo doc --no-deps --manifest-path libssh2-sys/Cargo.toml
+#     deploy:
+#       provider: script
+#       script: curl -LsSf https://git.io/fhJ8n | rustc - && (cd target/doc && ../../rust_out)
+#       skip_cleanup: true
+#       on:
+#         branch: master
+
+script:
+  - cargo build
+  - tests/run_integration_tests.sh
+  - rustdoc --test README.md -L target
+
+notifications:
+  email:
+    on_success: never
