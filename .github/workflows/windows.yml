@@ -40,5 +40,4 @@ jobs:
         rustc -V
         cargo -V
         cargo test --no-run --target %TARGET%
-        cargo run --manifest-path systest/Cargo.toml --target %TARGET%
       shell: cmd
