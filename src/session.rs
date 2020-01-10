@@ -105,7 +105,7 @@ impl Session {
         _username: &str,
         _prompter: &mut P,
     ) -> Result<(), Error> {
-        todo!();
+        unimplemented!();
     }
 
     /// See [`userauth_agent`](ssh2::Session::userauth_agent).
