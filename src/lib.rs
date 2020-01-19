@@ -15,7 +15,6 @@ pub use session::Session;
 pub use sftp::Sftp;
 
 pub use ssh2::{
-    BlockDirections, ExitSignal, FileStat, FileType, Host, Hosts, Identities, KnownHostFileKind,
-    KnownHosts, OpenFlags, Prompt, PtyModes, PublicKey, ReadWindow, RenameFlags, ScpFileStat,
-    WriteWindow,
+    BlockDirections, ExitSignal, FileStat, FileType, Host, KnownHostFileKind, KnownHosts,
+    OpenFlags, Prompt, PtyModes, PublicKey, ReadWindow, RenameFlags, ScpFileStat, WriteWindow,
 };

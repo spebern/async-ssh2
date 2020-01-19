@@ -49,7 +49,7 @@ async fn smoke_handshake() {
     agent.connect().await.unwrap();
     agent.list_identities().unwrap();
     {
-        let identity = agent.identities().next().unwrap().unwrap();
+        let identity = &agent.identities().unwrap()[0];
         agent.userauth(&user, &identity).await.unwrap();
     }
     assert!(sess.authenticated());

@@ -1,5 +1,4 @@
 use crate::{aio::Aio, into_the_future, Error};
-use libc::c_int;
 use ssh2::{self, FileStat, OpenFlags, OpenType};
 use std::{
     convert::From,
@@ -19,8 +18,8 @@ pub struct Sftp {
 }
 
 /// See [`File`](ssh2::File).
-pub struct File<'sftp> {
-    inner: ssh2::File<'sftp>,
+pub struct File {
+    inner: ssh2::File,
     aio: Arc<Option<Aio>>,
 }
 
@@ -36,20 +35,20 @@ impl Sftp {
         flags: ssh2::OpenFlags,
         mode: i32,
         open_type: ssh2::OpenType,
-    ) -> Result<File<'_>, Error> {
+    ) -> Result<File, Error> {
         let aio = self.aio.clone();
         let file = into_the_future!(aio; &mut || { self.inner.open_mode(filename, flags, mode, open_type) })?;
         Ok(File::new(file, self.aio.clone()))
     }
 
     /// See [`open`](ssh2::Sftp::open).
-    pub async fn open(&self, filename: &Path) -> Result<File<'_>, Error> {
+    pub async fn open(&self, filename: &Path) -> Result<File, Error> {
         self.open_mode(filename, OpenFlags::READ, 0o644, OpenType::File)
             .await
     }
 
     /// See [`create`](ssh2::Sftp::create).
-    pub async fn create(&self, filename: &Path) -> Result<File<'_>, Error> {
+    pub async fn create(&self, filename: &Path) -> Result<File, Error> {
         self.open_mode(
             filename,
             OpenFlags::WRITE | OpenFlags::TRUNCATE,
@@ -60,7 +59,7 @@ impl Sftp {
     }
 
     /// See [`opendir`](ssh2::Sftp::opendir).
-    pub async fn opendir(&self, dirname: &Path) -> Result<File<'_>, Error> {
+    pub async fn opendir(&self, dirname: &Path) -> Result<File, Error> {
         self.open_mode(dirname, OpenFlags::READ, 0, OpenType::Dir)
             .await
     }
@@ -154,16 +153,6 @@ impl Sftp {
         into_the_future!(aio; &mut || { self.inner.unlink(file) })
     }
 
-    /// See [`last_error`](ssh2::Sftp::last_error).
-    pub fn last_error(&self) -> Error {
-        From::from(self.inner.last_error())
-    }
-
-    /// See [`rc`](ssh2::Sftp::rc).
-    pub fn rc(&self, rc: c_int) -> Result<(), Error> {
-        self.inner.rc(rc).map_err(From::from)
-    }
-
     /// See [`unlink`](ssh2::Sftp::unlink).
     pub async fn shutdown(mut self) -> Result<(), Error> {
         let aio = self.aio.clone();
@@ -171,8 +160,8 @@ impl Sftp {
     }
 }
 
-impl<'sftp> File<'sftp> {
-    pub(crate) fn new(file: ssh2::File<'sftp>, aio: Arc<Option<Aio>>) -> Self {
+impl File {
+    pub(crate) fn new(file: ssh2::File, aio: Arc<Option<Aio>>) -> Self {
         Self { inner: file, aio }
     }
 
@@ -217,7 +206,7 @@ impl<'sftp> File<'sftp> {
     }
 }
 
-impl<'sftp> AsyncRead for File<'sftp> {
+impl AsyncRead for File {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -239,7 +228,7 @@ impl<'sftp> AsyncRead for File<'sftp> {
     }
 }
 
-impl<'sftp> AsyncWrite for File<'sftp> {
+impl AsyncWrite for File {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

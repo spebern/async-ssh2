@@ -8,9 +8,8 @@ async fn smoke() {
     agent.connect().await.unwrap();
     agent.list_identities().unwrap();
     {
-        let mut a = agent.identities();
-        let i1 = a.next().unwrap().unwrap();
-        a.count();
+        let a = agent.identities().unwrap();
+        let i1 = &a[0];
         assert!(agent.userauth("foo", &i1).await.is_err());
     }
     agent.disconnect().await.unwrap();

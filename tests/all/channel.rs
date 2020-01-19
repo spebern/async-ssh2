@@ -27,6 +27,13 @@ async fn consume_stdio(channel: &mut Channel) -> (String, String) {
 async fn smoke() {
     let sess = crate::authed_session().await;
     let mut channel = sess.channel_session().await.unwrap();
+
+    fn must_be_send<T: Send>(_: &T) -> bool {
+        true
+    }
+    assert!(must_be_send(&channel));
+    assert!(must_be_send(&channel.stream(0)));
+
     channel.flush().await.unwrap();
     channel.exec("true").await.unwrap();
     consume_stdio(&mut channel).await;

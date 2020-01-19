@@ -1,5 +1,5 @@
 use crate::{aio::Aio, into_the_future, Error};
-use ssh2::{self, Identities, PublicKey};
+use ssh2::{self, PublicKey};
 use std::{
     convert::From,
     future::Future,
@@ -38,12 +38,12 @@ impl Agent {
     }
 
     /// See [`identities`](ssh2::Agent::identities).
-    pub fn identities(&self) -> Identities {
-        self.inner.identities()
+    pub fn identities(&self) -> Result<Vec<PublicKey>, Error> {
+        self.inner.identities().map_err(From::from)
     }
 
     /// See [`userauth`](ssh2::Agent::userauth).
-    pub async fn userauth(&self, username: &str, identity: &PublicKey<'_>) -> Result<(), Error> {
+    pub async fn userauth(&self, username: &str, identity: &PublicKey) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.userauth(username, identity) })
     }

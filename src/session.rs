@@ -2,15 +2,11 @@ use crate::{
     agent::Agent, aio::Aio, channel::Channel, into_the_future, listener::Listener, sftp::Sftp,
     Error,
 };
-#[cfg(unix)]
-use libc::c_int;
-
 use ssh2::{
     self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
     ScpFileStat,
 };
 use std::{
-    cell::Ref,
     convert::From,
     future::Future,
     io,
@@ -26,11 +22,6 @@ pub struct Session {
     inner: ssh2::Session,
     aio: Arc<Option<Aio>>,
 }
-
-// The compiler doesn't know that it is Send safe because of the raw
-// pointer inside.  We know that the way that it is used by libssh2
-// and this crate is Send safe.
-unsafe impl Send for Session {}
 
 impl Session {
     /// See [`new`](ssh2::Session::new).
@@ -86,11 +77,6 @@ impl Session {
         self.aio = Arc::new(Some(aio));
         self.inner.set_tcp_stream(stream);
         Ok(())
-    }
-
-    /// See [`tcp_stream`](ssh2::Session::tcp_stream).
-    pub fn tcp_stream(&self) -> Ref<Option<TcpStream>> {
-        self.inner.tcp_stream()
     }
 
     /// See [`userauth_password`](ssh2::Session::userauth_password).
@@ -305,10 +291,5 @@ impl Session {
     ) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.disconnect(reason, description, lang) })
-    }
-
-    /// See [`rc`](ssh2::Session::rc).
-    pub fn rc(&self, rc: c_int) -> Result<(), Error> {
-        self.inner.rc(rc).map_err(From::from)
     }
 }

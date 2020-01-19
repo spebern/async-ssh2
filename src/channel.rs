@@ -83,12 +83,12 @@ impl Channel {
     }
 
     /// See [`stderr`](ssh2::Channel::stderr).
-    pub fn stderr(&mut self) -> Stream<'_> {
+    pub fn stderr(&mut self) -> Stream {
         self.inner.stderr()
     }
 
     /// See [`stream`](ssh2::Channel::stream).
-    pub fn stream(&mut self, stream_id: i32) -> Stream<'_> {
+    pub fn stream(&mut self, stream_id: i32) -> Stream {
         self.inner.stream(stream_id)
     }
 
@@ -122,12 +122,6 @@ impl Channel {
     pub async fn adjust_receive_window(&mut self, adjust: u64, force: bool) -> Result<u64, Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.adjust_receive_window(adjust, force) })
-    }
-
-    /// See [`limit_read`](ssh2::Channel::limit_read).
-    #[doc(hidden)]
-    pub fn limit_read(&mut self, limit: u64) {
-        self.inner.limit_read(limit)
     }
 
     /// See [`eof`](ssh2::Channel::eof).
