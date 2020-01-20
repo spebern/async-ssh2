@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/spebern/async-ssh2"
 homepage = "https://github.com/spebern/async-ssh2"
 documentation = "https://docs.rs/async-ssh2"
-description = """Async wrapper over ssh2 ."""
+description = """Async wrapper over ssh2."""
 edition = "2018"
 
 [features]
