@@ -15,7 +15,7 @@ Async wrapper over [ssh2-rs](https://github.com/alexcrichton/ssh2-rs).
 ```toml
 # Cargo.toml
 [dependencies]
-async-ssh2 = "todo"
+async-ssh2 = { version = "0.1", git = "https://github.com/spebern/async-ssh2.git" }
 ```
 
 ## Building on OSX 10.10+
