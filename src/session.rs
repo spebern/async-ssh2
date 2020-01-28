@@ -1,7 +1,4 @@
-use crate::{
-    agent::Agent, aio::Aio, channel::Channel, into_the_future, listener::Listener, sftp::Sftp,
-    Error,
-};
+use crate::{agent::Agent, aio::Aio, channel::Channel, listener::Listener, sftp::Sftp, Error};
 use ssh2::{
     self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
     ScpFileStat,

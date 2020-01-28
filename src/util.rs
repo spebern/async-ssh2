@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! into_the_future {
     ($aio:ident; $cb:expr) => {{
         struct ScopedFuture<'a, R, F: FnMut() -> Result<R, ssh2::Error>> {
