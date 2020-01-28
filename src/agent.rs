@@ -1,4 +1,4 @@
-use crate::{aio::Aio, into_the_future, Error};
+use crate::{aio::Aio, Error};
 use ssh2::{self, PublicKey};
 use std::{
     convert::From,
