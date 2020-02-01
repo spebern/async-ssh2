@@ -3,6 +3,10 @@ use ssh2::{
     self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
     ScpFileStat,
 };
+#[cfg(unix)]
+use std::os::unix::io::{AsRawFd, RawFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsRawSocket, RawSocket};
 use std::{
     convert::From,
     future::Future,
@@ -18,6 +22,26 @@ use std::{
 pub struct Session {
     inner: ssh2::Session,
     aio: Arc<Option<Aio>>,
+}
+
+#[cfg(unix)]
+struct RawFdWrapper(RawFd);
+
+#[cfg(unix)]
+impl AsRawFd for RawFdWrapper {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0
+    }
+}
+
+#[cfg(windows)]
+struct RawSocketWrapper(RawSocket);
+
+#[cfg(windows)]
+impl AsRawSocket for RawSocketWrapper {
+    fn as_raw_socket(&self) -> RawSocket {
+        self.0
+    }
 }
 
 impl Session {
@@ -70,9 +94,18 @@ impl Session {
 
     /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
     pub fn set_tcp_stream(&mut self, stream: TcpStream) -> Result<(), Error> {
-        let aio = Aio::new(stream.try_clone()?, self.inner.clone())?;
+        #[cfg(unix)]
+        {
+            let raw_fd = RawFdWrapper(stream.as_raw_fd());
+            self.inner.set_tcp_stream(raw_fd);
+        }
+        #[cfg(windows)]
+        {
+            let raw_socket = RawSocketWrapper(stream.as_raw_socket());
+            self.inner.set_tcp_stream(raw_socket);
+        }
+        let aio = Aio::new(stream, self.inner.clone())?;
         self.aio = Arc::new(Some(aio));
-        self.inner.set_tcp_stream(stream);
         Ok(())
     }
 
@@ -288,5 +321,19 @@ impl Session {
     ) -> Result<(), Error> {
         let aio = self.aio.clone();
         into_the_future!(aio; &mut || { self.inner.disconnect(reason, description, lang) })
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for Session {
+    fn as_raw_fd(&self) -> RawFd {
+        self.inner.as_raw_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsRawSocket for Session {
+    fn as_raw_socket(&self) -> RawSocket {
+        self.inner.as_raw_socket()
     }
 }

@@ -15,7 +15,7 @@ edition = "2018"
 vendored-openssl = ["ssh2/vendored-openssl"]
 
 [dependencies]
-ssh2 = "0.7"
+ssh2 = { git = "https://github.com/alexcrichton/ssh2-rs" }
 mio = { version = "0.6.21" }
 tokio = { version = "0.2", features = ["io-driver", "io-util"] }
 
