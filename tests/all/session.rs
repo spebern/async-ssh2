@@ -36,9 +36,9 @@ async fn smoke() {
 #[tokio::test]
 async fn smoke_handshake() {
     let user = env::var("USER").unwrap();
-    let socket = crate::socket();
+    let socket = crate::socket().await;
     let mut sess = Session::new().unwrap();
-    sess.set_tcp_stream(socket).unwrap();
+    sess.set_tcp_stream(socket);
     sess.handshake().await.unwrap();
     sess.host_key().unwrap();
     let methods = sess.auth_methods(&user).await.unwrap();

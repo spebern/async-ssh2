@@ -217,9 +217,10 @@ impl AsyncRead for File {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx)?;
+                        ready!(aio.poll(cx))?;
+                    } else {
+                        continue;
                     }
-                    return Poll::Pending;
                 }
                 Err(e) => return Poll::Ready(Err(e)),
                 Ok(val) => return Poll::Ready(Ok(val)),
@@ -239,9 +240,10 @@ impl AsyncWrite for File {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx)?;
+                        ready!(aio.poll(cx))?;
+                    } else {
+                        continue;
                     }
-                    return Poll::Pending;
                 }
                 Err(e) => return Poll::Ready(Err(e)),
                 Ok(val) => return Poll::Ready(Ok(val)),
@@ -255,9 +257,10 @@ impl AsyncWrite for File {
             match res {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if let Some(ref aio) = *self.aio {
-                        aio.set_waker(cx)?;
+                        ready!(aio.poll(cx))?;
+                    } else {
+                        continue;
                     }
-                    return Poll::Pending;
                 }
                 Err(e) => return Poll::Ready(Err(e)),
                 Ok(val) => return Poll::Ready(Ok(val)),

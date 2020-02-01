@@ -11,12 +11,12 @@ use std::{
     convert::From,
     future::Future,
     io,
-    net::TcpStream,
     path::Path,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
+use tokio::net::TcpStream;
 
 /// See [`Session`](ssh2::Session).
 pub struct Session {
@@ -93,7 +93,7 @@ impl Session {
     }
 
     /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
-    pub fn set_tcp_stream(&mut self, stream: TcpStream) -> Result<(), Error> {
+    pub fn set_tcp_stream(&mut self, stream: TcpStream) {
         #[cfg(unix)]
         {
             let raw_fd = RawFdWrapper(stream.as_raw_fd());
@@ -104,9 +104,8 @@ impl Session {
             let raw_socket = RawSocketWrapper(stream.as_raw_socket());
             self.inner.set_tcp_stream(raw_socket);
         }
-        let aio = Aio::new(stream, self.inner.clone())?;
+        let aio = Aio::new(stream, self.inner.clone());
         self.aio = Arc::new(Some(aio));
-        Ok(())
     }
 
     /// See [`userauth_password`](ssh2::Session::userauth_password).
