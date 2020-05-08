@@ -15,12 +15,10 @@ edition = "2018"
 vendored-openssl = ["ssh2/vendored-openssl"]
 
 [dependencies]
-ssh2 = { git = "https://github.com/alexcrichton/ssh2-rs" }
-mio = { version = "0.6.21" }
+ssh2 = "0.8"
 smol = "0.1"
 futures = "0.3.4"
-piper = "0.1.1"
-futures-io = "0.3.4"
+piper = "0.1"
 
 [dev-dependencies]
 tempfile = "3.1"
