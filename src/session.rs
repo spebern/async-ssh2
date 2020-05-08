@@ -10,7 +10,7 @@ use ssh2::{
 use std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, RawSocket};
-use std::{convert::From, net::TcpStream, path::Path, sync::Arc};
+use std::{convert::From, net::TcpStream, path::Path, sync::{Arc, Once}};
 
 /// See [`Session`](ssh2::Session).
 pub struct Session {
@@ -42,7 +42,12 @@ impl Session {
     /// See [`new`](ssh2::Session::new).
     pub fn new() -> Result<Session, Error> {
         let session = ssh2::Session::new()?;
+        static START: Once = Once::new();
+        START.call_once(|| {
+            std::thread::spawn(|| smol::run(futures::future::pending::<()>()));
+        });
         session.set_blocking(false);
+
         Ok(Self {
             inner: session,
             stream: None,
