@@ -98,12 +98,17 @@ impl Session {
 
     /// Sets the tcp stream for the underlying `ssh2` lib.
     ///
-    /// ```rust,norun
+    /// ```rust,no_run
     /// use async_ssh2::Session;
+    /// use std::net::TcpStream;
     /// use smol::Async;
     ///
-    /// Async::<TcpStream>::connect("127.0.0.1:22").await.unwrap()
-    /// let sess = async_ssh2::Session::new().unwrap();
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let stream = Async::<TcpStream>::connect("127.0.0.1:22").await.unwrap();
+    ///     let mut sess = async_ssh2::Session::new().unwrap();
+    ///     sess.set_tcp_stream(stream).unwrap();
+    /// }
     /// ```
     pub fn set_tcp_stream(&mut self, stream: Async<TcpStream>) -> Result<(), Error> {
         #[cfg(unix)]
