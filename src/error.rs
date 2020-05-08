@@ -1,4 +1,3 @@
-use ssh2;
 use std::{convert::From, error, fmt, io};
 
 /// Representation of an error.

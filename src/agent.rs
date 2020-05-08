@@ -1,35 +1,30 @@
-use crate::{aio::Aio, Error};
+use crate::{util::run_ssh2_fn, Error};
+use smol::Async;
 use ssh2::{self, PublicKey};
-use std::{
-    convert::From,
-    future::Future,
-    io,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::{convert::From, net::TcpStream, sync::Arc};
 
 /// See [`Agent`](ssh2::Agent).
 pub struct Agent {
     inner: ssh2::Agent,
-    aio: Arc<Option<Aio>>,
+    stream: Arc<Async<TcpStream>>,
 }
 
 impl Agent {
-    pub(crate) fn new(agent: ssh2::Agent, aio: Arc<Option<Aio>>) -> Self {
-        Self { inner: agent, aio }
+    pub(crate) fn new(agent: ssh2::Agent, stream: Arc<Async<TcpStream>>) -> Self {
+        Self {
+            inner: agent,
+            stream,
+        }
     }
 
     /// See [`connect`](ssh2::Agent::connect).
     pub async fn connect(&mut self) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.connect() })
+        run_ssh2_fn(&self.stream.clone(), || self.inner.connect()).await
     }
 
     /// See [`disconnect`](ssh2::Agent::disconnect).
     pub async fn disconnect(&mut self) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.disconnect() })
+        run_ssh2_fn(&self.stream.clone(), || self.inner.disconnect()).await
     }
 
     /// See [`list_identities`](ssh2::Agent::list_identities).
@@ -44,7 +39,9 @@ impl Agent {
 
     /// See [`userauth`](ssh2::Agent::userauth).
     pub async fn userauth(&self, username: &str, identity: &PublicKey) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth(username, identity) })
+        run_ssh2_fn(&self.stream.clone(), || {
+            self.inner.userauth(username, identity)
+        })
+        .await
     }
 }

@@ -1,12 +1,10 @@
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use std::{
     fs::{self, File},
     io::prelude::*,
 };
 use tempfile::tempdir;
-use tokio::{
-    self,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use tokio;
 
 #[tokio::test]
 async fn smoke() {

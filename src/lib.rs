@@ -1,8 +1,6 @@
-#[macro_use]
 mod util;
 
 mod agent;
-mod aio;
 mod channel;
 mod error;
 mod listener;

@@ -1,4 +1,7 @@
-use crate::{agent::Agent, aio::Aio, channel::Channel, listener::Listener, sftp::Sftp, Error};
+use crate::{
+    agent::Agent, channel::Channel, listener::Listener, sftp::Sftp, util::run_ssh2_fn, Error,
+};
+use smol::Async;
 use ssh2::{
     self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
     ScpFileStat,
@@ -7,21 +10,12 @@ use ssh2::{
 use std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, RawSocket};
-use std::{
-    convert::From,
-    future::Future,
-    io,
-    net::TcpStream,
-    path::Path,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::{convert::From, net::TcpStream, path::Path, sync::Arc};
 
 /// See [`Session`](ssh2::Session).
 pub struct Session {
     inner: ssh2::Session,
-    aio: Arc<Option<Aio>>,
+    stream: Option<Arc<Async<TcpStream>>>,
 }
 
 #[cfg(unix)]
@@ -51,14 +45,16 @@ impl Session {
         session.set_blocking(false);
         Ok(Self {
             inner: session,
-            aio: Arc::new(None),
+            stream: None,
         })
     }
 
     /// See [`set_banner`](ssh2::Session::set_banner).
     pub async fn set_banner(&self, banner: &str) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.set_banner(banner) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.set_banner(banner)
+        })
+        .await
     }
 
     /// See [`set_allow_sigpipe`](ssh2::Session::set_allow_sigpipe).
@@ -88,12 +84,16 @@ impl Session {
 
     /// See [`handshake`](ssh2::Session::handshake).
     pub async fn handshake(&mut self) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.handshake() })
+        let res = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.clone().handshake()
+        })
+        .await;
+        dbg!(&res);
+        res
     }
 
     /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
-    pub fn set_tcp_stream(&mut self, stream: TcpStream) -> Result<(), Error> {
+    pub fn set_tcp_stream(&mut self, stream: Async<TcpStream>) -> Result<(), Error> {
         #[cfg(unix)]
         {
             let raw_fd = RawFdWrapper(stream.as_raw_fd());
@@ -104,15 +104,16 @@ impl Session {
             let raw_socket = RawSocketWrapper(stream.as_raw_socket());
             self.inner.set_tcp_stream(raw_socket);
         }
-        let aio = Aio::new(stream, self.inner.clone())?;
-        self.aio = Arc::new(Some(aio));
+        self.stream = Some(Arc::new(stream));
         Ok(())
     }
 
     /// See [`userauth_password`](ssh2::Session::userauth_password).
     pub async fn userauth_password(&self, username: &str, password: &str) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth_password(username, password) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.userauth_password(username, password)
+        })
+        .await
     }
 
     /// See [`userauth_keyboard_interactive`](ssh2::Session::userauth_keyboard_interactive).
@@ -126,8 +127,10 @@ impl Session {
 
     /// See [`userauth_agent`](ssh2::Session::userauth_agent).
     pub async fn userauth_agent(&self, username: &str) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth_agent(username) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.userauth_agent(username)
+        })
+        .await
     }
 
     /// See [`userauth_pubkey_file`](ssh2::Session::userauth_pubkey_file).
@@ -138,8 +141,11 @@ impl Session {
         privatekey: &Path,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth_pubkey_file(username, pubkey, privatekey, passphrase) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner
+                .userauth_pubkey_file(username, pubkey, privatekey, passphrase)
+        })
+        .await
     }
 
     /// See [`userauth_pubkey_memory`](ssh2::Session::userauth_pubkey_memory).
@@ -151,8 +157,11 @@ impl Session {
         privatekeydata: &str,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth_pubkey_memory(username, pubkeydata, privatekeydata, passphrase) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner
+                .userauth_pubkey_memory(username, pubkeydata, privatekeydata, passphrase)
+        })
+        .await
     }
 
     /// See [`userauth_hostbased_file`](ssh2::Session::userauth_hostbased_file).
@@ -166,8 +175,17 @@ impl Session {
         hostname: &str,
         local_username: Option<&str>,
     ) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.userauth_hostbased_file(username, publickey, privatekey, passphrase, hostname, local_username) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.userauth_hostbased_file(
+                username,
+                publickey,
+                privatekey,
+                passphrase,
+                hostname,
+                local_username,
+            )
+        })
+        .await
     }
 
     /// See [`authenticated`](ssh2::Session::authenticated).
@@ -177,14 +195,16 @@ impl Session {
 
     /// See [`auth_methods`](ssh2::Session::auth_methods).
     pub async fn auth_methods(&self, username: &str) -> Result<&str, Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.auth_methods(username) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.auth_methods(username)
+        })
+        .await
     }
 
     /// See [`method_pref`](ssh2::Session::method_pref).
-    pub async fn method_pref(&self, method_type: MethodType, prefs: &str) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.method_pref(method_type, prefs) })
+    pub fn method_pref(&self, method_type: MethodType, prefs: &str) -> Result<(), Error> {
+        self.inner.method_pref(method_type, prefs)?;
+        Ok(())
     }
 
     /// See [`methods`](ssh2::Session::methods).
@@ -200,7 +220,7 @@ impl Session {
     /// See [`agent`](ssh2::Session::agent).
     pub fn agent(&self) -> Result<Agent, Error> {
         let agent = self.inner.agent()?;
-        Ok(Agent::new(agent, self.aio.clone()))
+        Ok(Agent::new(agent, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`known_hosts`](ssh2::Session::known_hosts).
@@ -210,9 +230,11 @@ impl Session {
 
     /// See [`channel_session`](ssh2::Session::channel_session).
     pub async fn channel_session(&self) -> Result<Channel, Error> {
-        let aio = self.aio.clone();
-        let channel = into_the_future!(aio; &mut || { self.inner.channel_session() })?;
-        Ok(Channel::new(channel, self.aio.clone()))
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.channel_session()
+        })
+        .await?;
+        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_direct_tcpip`](ssh2::Session::channel_direct_tcpip).
@@ -222,10 +244,11 @@ impl Session {
         port: u16,
         src: Option<(&str, u16)>,
     ) -> Result<Channel, Error> {
-        let aio = self.aio.clone();
-        let channel =
-            into_the_future!(aio; &mut || { self.inner.channel_direct_tcpip(host, port, src) })?;
-        Ok(Channel::new(channel, self.aio.clone()))
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.channel_direct_tcpip(host, port, src)
+        })
+        .await?;
+        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_forward_listen`](ssh2::Session::channel_forward_listen).
@@ -235,16 +258,25 @@ impl Session {
         host: Option<&str>,
         queue_maxsize: Option<u32>,
     ) -> Result<(Listener, u16), Error> {
-        let aio = self.aio.clone();
-        let (listener, port) = into_the_future!(aio; &mut || { self.inner.channel_forward_listen(remote_port, host, queue_maxsize) })?;
-        Ok((Listener::new(listener, self.aio.clone()), port))
+        let (listener, port) = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner
+                .channel_forward_listen(remote_port, host, queue_maxsize)
+        })
+        .await?;
+        Ok((
+            Listener::new(listener, self.stream.as_ref().unwrap().clone()),
+            port,
+        ))
     }
 
     /// See [`scp_recv`](ssh2::Session::scp_recv).
     pub async fn scp_recv(&self, path: &Path) -> Result<(Channel, ScpFileStat), Error> {
-        let aio = self.aio.clone();
-        let (channel, file_stat) = into_the_future!(aio; &mut || { self.inner.scp_recv(path) })?;
-        Ok((Channel::new(channel, self.aio.clone()), file_stat))
+        let (channel, file_stat) =
+            run_ssh2_fn(self.stream.as_ref().unwrap(), || self.inner.scp_recv(path)).await?;
+        Ok((
+            Channel::new(channel, self.stream.as_ref().unwrap().clone()),
+            file_stat,
+        ))
     }
 
     /// See [`scp_send`](ssh2::Session::scp_send).
@@ -255,17 +287,17 @@ impl Session {
         size: u64,
         times: Option<(u64, u64)>,
     ) -> Result<Channel, Error> {
-        let aio = self.aio.clone();
-        let channel =
-            into_the_future!(aio; &mut || { self.inner.scp_send(remote_path, mode, size, times) })?;
-        Ok(Channel::new(channel, self.aio.clone()))
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.scp_send(remote_path, mode, size, times)
+        })
+        .await?;
+        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`sftp`](ssh2::Session::sftp).
     pub async fn sftp(&self) -> Result<Sftp, Error> {
-        let aio = self.aio.clone();
-        let sftp = into_the_future!(aio; &mut || { self.inner.sftp() })?;
-        Ok(Sftp::new(sftp, self.aio.clone()))
+        let sftp = run_ssh2_fn(self.stream.as_ref().unwrap(), || self.inner.sftp()).await?;
+        Ok(Sftp::new(sftp, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_open`](ssh2::Session::channel_open).
@@ -276,9 +308,12 @@ impl Session {
         packet_size: u32,
         message: Option<&str>,
     ) -> Result<Channel, Error> {
-        let aio = self.aio.clone();
-        let channel = into_the_future!(aio; &mut || { self.inner.channel_open(channel_type, window_size, packet_size, message) })?;
-        Ok(Channel::new(channel, self.aio.clone()))
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner
+                .channel_open(channel_type, window_size, packet_size, message)
+        })
+        .await?;
+        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`banner`](ssh2::Session::banner).
@@ -308,8 +343,10 @@ impl Session {
 
     /// See [`keepalive_send`](ssh2::Session::keepalive_send).
     pub async fn keepalive_send(&self) -> Result<u32, Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.keepalive_send() })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.keepalive_send()
+        })
+        .await
     }
 
     /// See [`disconnect`](ssh2::Session::disconnect).
@@ -319,8 +356,10 @@ impl Session {
         description: &str,
         lang: Option<&str>,
     ) -> Result<(), Error> {
-        let aio = self.aio.clone();
-        into_the_future!(aio; &mut || { self.inner.disconnect(reason, description, lang) })
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+            self.inner.disconnect(reason, description, lang)
+        })
+        .await
     }
 }
 

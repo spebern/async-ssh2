@@ -1,31 +1,25 @@
-use crate::{aio::Aio, channel::Channel, Error};
+use crate::{channel::Channel, util::run_ssh2_fn, Error};
+use smol::Async;
 use ssh2::{self};
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::{net::TcpStream, sync::Arc};
 
 /// See [`Listener`](ssh2::Listener).
 pub struct Listener {
     inner: ssh2::Listener,
-    aio: Arc<Option<Aio>>,
+    stream: Arc<Async<TcpStream>>,
 }
 
 impl Listener {
-    pub(crate) fn new(listener: ssh2::Listener, aio: Arc<Option<Aio>>) -> Self {
+    pub(crate) fn new(listener: ssh2::Listener, stream: Arc<Async<TcpStream>>) -> Self {
         Self {
             inner: listener,
-            aio,
+            stream,
         }
     }
 
     /// See [`accept`](ssh2::Listener::accept).
     pub async fn accept(&mut self) -> Result<Channel, Error> {
-        let aio = self.aio.clone();
-        let channel = into_the_future!(aio; &mut || { self.inner.accept() })?;
-        Ok(Channel::new(channel, self.aio.clone()))
+        let channel = run_ssh2_fn(&self.stream.clone(), || self.inner.accept()).await?;
+        Ok(Channel::new(channel, self.stream.clone()))
     }
 }

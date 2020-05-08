@@ -3,6 +3,7 @@
 extern crate async_ssh2;
 extern crate tempfile;
 
+use smol::Async;
 use std::{env, net::TcpStream};
 
 mod agent;
@@ -19,13 +20,13 @@ pub fn test_addr() -> String {
     addr
 }
 
-pub fn socket() -> TcpStream {
-    TcpStream::connect(&test_addr()).unwrap()
+pub async fn socket() -> Async<TcpStream> {
+    Async::<TcpStream>::connect(&test_addr()).await.unwrap()
 }
 
 pub async fn authed_session() -> async_ssh2::Session {
     let user = env::var("USER").unwrap();
-    let socket = socket();
+    let socket = socket().await;
     let mut sess = async_ssh2::Session::new().unwrap();
     sess.set_tcp_stream(socket).unwrap();
     sess.handshake().await.unwrap();

@@ -1,8 +1,8 @@
 use async_ssh2::Session;
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use ssh2::{HashType, MethodType};
 use std::{env, fs::File, io::prelude::*, path::Path};
 use tempfile::tempdir;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[test]
 fn session_is_send() {
@@ -16,7 +16,9 @@ fn session_is_send() {
 
 #[tokio::test]
 async fn smoke() {
-    let sess = Session::new().unwrap();
+    let socket = crate::socket().await;
+    let mut sess = Session::new().unwrap();
+    sess.set_tcp_stream(socket).unwrap();
     assert!(sess.banner_bytes().is_none());
     sess.set_banner("foo").await.unwrap();
     assert!(!sess.is_blocking());
@@ -24,7 +26,6 @@ async fn smoke() {
     sess.set_compress(true);
     assert!(sess.host_key().is_none());
     sess.method_pref(MethodType::Kex, "diffie-hellman-group14-sha1")
-        .await
         .unwrap();
     assert!(sess.methods(MethodType::Kex).is_none());
     sess.set_timeout(0);
@@ -36,10 +37,9 @@ async fn smoke() {
 #[tokio::test]
 async fn smoke_handshake() {
     let user = env::var("USER").unwrap();
-    let socket = crate::socket();
+    let socket = crate::socket().await;
     let mut sess = Session::new().unwrap();
     sess.set_tcp_stream(socket).unwrap();
-    sess.handshake().await.unwrap();
     sess.host_key().unwrap();
     let methods = sess.auth_methods(&user).await.unwrap();
     assert!(methods.contains("publickey"), "{}", methods);

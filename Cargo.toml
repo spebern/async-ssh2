@@ -18,6 +18,10 @@ vendored-openssl = ["ssh2/vendored-openssl"]
 ssh2 = { git = "https://github.com/alexcrichton/ssh2-rs" }
 mio = { version = "0.6.21" }
 tokio = { version = "0.2", features = ["io-driver", "io-util"] }
+smol = "0.1"
+futures = "0.3.4"
+piper = "0.1.1"
+futures-io = "0.3.4"
 
 [dev-dependencies]
 tempfile = "3.1"

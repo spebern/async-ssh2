@@ -1,10 +1,10 @@
 use async_ssh2::Channel;
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use std::{
     io::prelude::*,
     net::{TcpListener, TcpStream},
     thread,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Consume all available stdout and stderr data.
 /// It is important to read both if you are using
