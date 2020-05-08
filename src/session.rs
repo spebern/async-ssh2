@@ -88,7 +88,6 @@ impl Session {
             self.inner.clone().handshake()
         })
         .await;
-        dbg!(&res);
         res
     }
 
