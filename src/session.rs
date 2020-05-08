@@ -96,7 +96,15 @@ impl Session {
         res
     }
 
-    /// See [`set_tcp_stream`](ssh2::Session::set_tcp_stream).
+    /// Sets the tcp stream for the underlying `ssh2` lib.
+    ///
+    /// ```rust,norun
+    /// use async_ssh2::Session;
+    /// use smol::Async;
+    ///
+    /// Async::<TcpStream>::connect("127.0.0.1:22").await.unwrap()
+    /// let sess = async_ssh2::Session::new().unwrap();
+    /// ```
     pub fn set_tcp_stream(&mut self, stream: Async<TcpStream>) -> Result<(), Error> {
         #[cfg(unix)]
         {
