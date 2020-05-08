@@ -1,5 +1,4 @@
 use async_ssh2::Session;
-use tokio;
 
 #[tokio::test]
 async fn smoke() {
