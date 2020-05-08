@@ -18,14 +18,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match self {
-            Error::SSH2(e) => e.message(),
-            Error::Io(e) => e.description(),
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl From<ssh2::Error> for Error {
     fn from(e: ssh2::Error) -> Error {
