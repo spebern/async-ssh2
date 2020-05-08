@@ -40,6 +40,7 @@ async fn smoke_handshake() {
     let socket = crate::socket().await;
     let mut sess = Session::new().unwrap();
     sess.set_tcp_stream(socket).unwrap();
+    sess.handshake().await.unwrap();
     sess.host_key().unwrap();
     let methods = sess.auth_methods(&user).await.unwrap();
     assert!(methods.contains("publickey"), "{}", methods);
