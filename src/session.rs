@@ -10,7 +10,12 @@ use ssh2::{
 use std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, RawSocket};
-use std::{convert::From, net::TcpStream, path::Path, sync::{Arc, Once}};
+use std::{
+    convert::From,
+    net::TcpStream,
+    path::Path,
+    sync::{Arc, Once},
+};
 
 /// See [`Session`](ssh2::Session).
 pub struct Session {
@@ -144,10 +149,15 @@ impl Session {
 
     /// See [`userauth_agent`](ssh2::Session::userauth_agent).
     pub async fn userauth_agent(&self, username: &str) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
-            self.inner.userauth_agent(username)
-        })
-        .await
+        let mut agent = self.agent()?;
+        agent.connect().await?;
+        agent.list_identities()?;
+        let identities = agent.identities()?;
+        let identity = match identities.get(0) {
+            Some(identity) => identity,
+            None => return Err(Error::from(ssh2::Error::from_errno(-4))),
+        };
+        agent.userauth(username, &identity).await
     }
 
     /// See [`userauth_pubkey_file`](ssh2::Session::userauth_pubkey_file).
