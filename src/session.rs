@@ -94,11 +94,10 @@ impl Session {
 
     /// See [`handshake`](ssh2::Session::handshake).
     pub async fn handshake(&mut self) -> Result<(), Error> {
-        let res = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
             self.inner.clone().handshake()
         })
-        .await;
-        res
+        .await
     }
 
     /// Sets the tcp stream for the underlying `ssh2` lib.
