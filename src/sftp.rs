@@ -3,7 +3,7 @@ use futures::prelude::*;
 use smol::Async;
 use ssh2::{self, FileStat, OpenFlags, OpenType};
 use std::{
-    io::{self, Read, Write},
+    io::{self, Read, Seek, Write},
     net::TcpStream,
     path::{Path, PathBuf},
     pin::Pin,
@@ -234,5 +234,11 @@ impl AsyncWrite for File {
 
     fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
+    }
+}
+
+impl Seek for File {
+    fn seek(&mut self, how: std::io::SeekFrom) -> std::result::Result<u64, std::io::Error> {
+        self.inner.seek(how)
     }
 }
