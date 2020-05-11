@@ -238,7 +238,7 @@ impl AsyncWrite for File {
 }
 
 impl Seek for File {
-    fn seek(&mut self, how: std::io::SeekFrom) -> std::result::Result<u64, std::io::Error> {
-        self.inner.seek(how)
+    fn seek(&mut self, pos: io::SeekFrom) -> Result<u64, io::Error> {
+        self.inner.seek(pos)
     }
 }
