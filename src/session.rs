@@ -51,7 +51,7 @@ impl Session {
         START.call_once(|| {
             std::thread::spawn(|| smol::run(futures::future::pending::<()>()));
         });
-        session.set_blocking(false);
+        session.set_blocking(true);
 
         Ok(Self {
             inner: session,
