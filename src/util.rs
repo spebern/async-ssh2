@@ -7,7 +7,7 @@ pub async fn run_ssh2_fn<R, F: FnMut() -> Result<R, ssh2::Error>>(
     mut cb: F,
 ) -> Result<R, Error> {
     let res = stream
-        .with(|_s| match cb() {
+        .read_with(|_s| match cb() {
             Ok(v) => Ok(Ok(v)),
             Err(e)
                 if io::Error::from(ssh2::Error::from_errno(e.code())).kind()
