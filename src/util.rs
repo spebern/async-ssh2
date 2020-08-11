@@ -1,6 +1,11 @@
 use crate::Error;
 use smol::Async;
-use std::{io, net::TcpStream};
+use std::{
+    future::Future,
+    io,
+    net::TcpStream,
+    task::{Context, Poll},
+};
 
 pub async fn run_ssh2_fn<R, F: FnMut() -> Result<R, ssh2::Error>>(
     stream: &Async<TcpStream>,
@@ -19,4 +24,9 @@ pub async fn run_ssh2_fn<R, F: FnMut() -> Result<R, ssh2::Error>>(
         })
         .await??;
     Ok(res)
+}
+
+pub(crate) fn poll_once<T>(cx: &mut Context<'_>, fut: impl Future<Output = T>) -> Poll<T> {
+    pin_utils::pin_mut!(fut);
+    fut.poll(cx)
 }

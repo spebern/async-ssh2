@@ -1,4 +1,7 @@
-use crate::{util::run_ssh2_fn, Error};
+use crate::{
+    util::{poll_once, run_ssh2_fn},
+    Error,
+};
 use futures::prelude::*;
 use smol::Async;
 use ssh2::{self, ExitSignal, ExtendedData, PtyModes, ReadWindow, Stream, WriteWindow};
@@ -16,6 +19,58 @@ use std::{
 pub struct Channel {
     inner: ssh2::Channel,
     stream: Arc<Async<TcpStream>>,
+}
+
+pub struct AsyncStream {
+    inner: Stream,
+    async_io: Arc<Async<TcpStream>>,
+}
+
+impl AsyncStream {
+    pub(crate) fn from_parts(inner: Stream, async_io: Arc<Async<TcpStream>>) -> Self {
+        Self { inner, async_io }
+    }
+}
+
+impl AsyncRead for AsyncStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let this = self.get_mut();
+
+        let inner = &mut this.inner;
+
+        poll_once(cx, this.async_io.read_with(|_| inner.read(buf)))
+    }
+}
+
+impl AsyncWrite for AsyncStream {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
+        let this = self.get_mut();
+
+        let inner = &mut this.inner;
+
+        poll_once(cx, this.async_io.write_with(|_| inner.write(buf)))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+
+        let inner = &mut this.inner;
+
+        poll_once(cx, this.async_io.write_with(|_| inner.flush()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+
+        let _ = &mut this.inner;
+
+        // TODO FIXME
+        poll_once(cx, this.async_io.write_with(|_| Ok(())))
+    }
 }
 
 impl Channel {
@@ -87,13 +142,13 @@ impl Channel {
     }
 
     /// See [`stderr`](ssh2::Channel::stderr).
-    pub fn stderr(&mut self) -> Stream {
-        self.inner.stderr()
+    pub fn stderr(&mut self) -> AsyncStream {
+        AsyncStream::from_parts(self.inner.stderr(), self.stream.clone())
     }
 
     /// See [`stream`](ssh2::Channel::stream).
-    pub fn stream(&mut self, stream_id: i32) -> Stream {
-        self.inner.stream(stream_id)
+    pub async fn stream(&mut self, stream_id: i32) -> AsyncStream {
+        AsyncStream::from_parts(self.inner.stream(stream_id), self.stream.clone())
     }
 
     /// See [`handle_extended_data`](ssh2::Channel::handle_extended_data).
