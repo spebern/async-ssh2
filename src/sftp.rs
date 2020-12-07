@@ -205,7 +205,7 @@ impl AsyncRead for File {
     ) -> Poll<io::Result<usize>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.read(buf))
+            .read_with(|_s| self.inner.read(buf))
             .boxed()
             .poll_unpin(cx)
     }
@@ -219,7 +219,7 @@ impl AsyncWrite for File {
     ) -> Poll<Result<usize, io::Error>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.write(buf))
+            .write_with(|_s| self.inner.write(buf))
             .boxed()
             .poll_unpin(cx)
     }
@@ -227,7 +227,7 @@ impl AsyncWrite for File {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.flush())
+            .write_with(|_s| self.inner.flush())
             .boxed()
             .poll_unpin(cx)
     }
