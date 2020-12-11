@@ -166,7 +166,7 @@ impl AsyncRead for Channel {
     ) -> Poll<io::Result<usize>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.read(buf))
+            .read_with(|_s| self.inner.read(buf))
             .boxed()
             .poll_unpin(cx)
     }
@@ -180,7 +180,7 @@ impl AsyncWrite for Channel {
     ) -> Poll<Result<usize, io::Error>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.write(buf))
+            .write_with(|_s| self.inner.write(buf))
             .boxed()
             .poll_unpin(cx)
     }
@@ -188,13 +188,17 @@ impl AsyncWrite for Channel {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.stream
             .clone()
-            .with(|_s| self.inner.flush())
+            .write_with(|_s| self.inner.flush())
             .boxed()
             .poll_unpin(cx)
     }
 
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(Ok(()))
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.stream
+            .clone()
+            .write_with(|_s| self.inner.close().map_err(|e| io::Error::from(ssh2::Error::from_errno(e.code()))))
+            .boxed()
+            .poll_unpin(cx)
     }
 }
 
