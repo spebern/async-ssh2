@@ -15,7 +15,7 @@ edition = "2018"
 vendored-openssl = ["ssh2/vendored-openssl"]
 
 [dependencies]
-ssh2 = "0.8"
+ssh2 = "0.9"
 smol = "0.1"
 futures = "0.3.4"
 
