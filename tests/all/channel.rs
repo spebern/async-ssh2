@@ -10,7 +10,7 @@ use std::{
 /// It is important to read both if you are using
 /// channel.eof() to make assertions that the stream
 /// is complete
-async fn consume_stdio(channel: &mut Channel) -> (String, String) {
+async fn consume_stdio<'a>(channel: &mut Channel<'a>) -> (String, String) {
     let mut stdout = String::new();
     channel.read_to_string(&mut stdout).await.unwrap();
 
