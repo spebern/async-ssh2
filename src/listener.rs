@@ -4,14 +4,14 @@ use ssh2::{self};
 use std::{net::TcpStream, sync::Arc};
 
 /// See [`Listener`](ssh2::Listener).
-pub struct Listener<'a> {
+pub struct Listener {
     inner: ssh2::Listener,
-    inner_session: &'a ssh2::Session,
+    inner_session: ssh2::Session,
     stream: Arc<Async<TcpStream>>,
 }
 
-impl<'a> Listener<'a> {
-    pub(crate) fn new<'b>(listener: ssh2::Listener, session: &'b ssh2::Session, stream: Arc<Async<TcpStream>>) -> Listener<'b> {
+impl Listener {
+    pub(crate) fn new(listener: ssh2::Listener, session: ssh2::Session, stream: Arc<Async<TcpStream>>) -> Listener {
         Listener {
             inner: listener,
             inner_session: session,
@@ -20,8 +20,9 @@ impl<'a> Listener<'a> {
     }
 
     /// See [`accept`](ssh2::Listener::accept).
-    pub async fn accept<'b>(&'b mut self) -> Result<Channel<'b>, Error> {
-        let channel = run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.accept()).await?;
-        Ok(Channel::new(channel, self.inner_session, self.stream.clone()))
+    pub async fn accept(&mut self) -> Result<Channel, Error> {
+        let inner = &mut self.inner;
+        let channel = run_ssh2_fn(&self.stream.clone(), &self.inner_session, || inner.accept()).await?;
+        Ok(Channel::new(channel, self.inner_session.clone(), self.stream.clone()))
     }
 }

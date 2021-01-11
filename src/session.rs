@@ -243,7 +243,7 @@ impl Session {
     /// See [`agent`](ssh2::Session::agent).
     pub fn agent(&self) -> Result<Agent, Error> {
         let agent = self.inner.agent()?;
-        Ok(Agent::new(agent, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Agent::new(agent, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`known_hosts`](ssh2::Session::known_hosts).
@@ -252,91 +252,91 @@ impl Session {
     }
 
     /// See [`channel_session`](ssh2::Session::channel_session).
-    pub async fn channel_session<'b>(&'b self) -> Result<Channel<'b>, Error> {
+    pub async fn channel_session(&self) -> Result<Channel, Error> {
         let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.channel_session()
         })
         .await?;
-        Ok(Channel::new(channel, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_direct_tcpip`](ssh2::Session::channel_direct_tcpip).
-    pub async fn channel_direct_tcpip<'b>(
-        &'b self,
+    pub async fn channel_direct_tcpip(
+        &self,
         host: &str,
         port: u16,
         src: Option<(&str, u16)>,
-    ) -> Result<Channel<'b>, Error> {
+    ) -> Result<Channel, Error> {
         let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.channel_direct_tcpip(host, port, src)
         })
         .await?;
-        Ok(Channel::new(channel, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_forward_listen`](ssh2::Session::channel_forward_listen).
-    pub async fn channel_forward_listen<'b>(
-        &'b self,
+    pub async fn channel_forward_listen(
+        &self,
         remote_port: u16,
         host: Option<&str>,
         queue_maxsize: Option<u32>,
-    ) -> Result<(Listener<'b>, u16), Error> {
+    ) -> Result<(Listener, u16), Error> {
         let (listener, port) = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner
                 .channel_forward_listen(remote_port, host, queue_maxsize)
         })
         .await?;
         Ok((
-            Listener::new(listener, &self.inner, self.stream.as_ref().unwrap().clone()),
+            Listener::new(listener, self.inner.clone(), self.stream.as_ref().unwrap().clone()),
             port,
         ))
     }
 
     /// See [`scp_recv`](ssh2::Session::scp_recv).
-    pub async fn scp_recv<'b>(&'b self, path: &Path) -> Result<(Channel<'b>, ScpFileStat), Error> {
+    pub async fn scp_recv(&self, path: &Path) -> Result<(Channel, ScpFileStat), Error> {
         let (channel, file_stat) =
             run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || self.inner.scp_recv(path)).await?;
         Ok((
-            Channel::new(channel, &self.inner, self.stream.as_ref().unwrap().clone()),
+            Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()),
             file_stat,
         ))
     }
 
     /// See [`scp_send`](ssh2::Session::scp_send).
-    pub async fn scp_send<'b>(
-        &'b self,
+    pub async fn scp_send(
+        &self,
         remote_path: &Path,
         mode: i32,
         size: u64,
         times: Option<(u64, u64)>,
-    ) -> Result<Channel<'b>, Error> {
+    ) -> Result<Channel, Error> {
         let channel = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner.scp_send(remote_path, mode, size, times)
         })
         .await?;
-        Ok(Channel::new(channel, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`sftp`](ssh2::Session::sftp).
-    pub async fn sftp<'b>(&'b self) -> Result<Sftp<'b>, Error> {
+    pub async fn sftp(& self) -> Result<Sftp, Error> {
         let sftp = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || self.inner.sftp()).await?;
-        Ok(Sftp::new(sftp, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Sftp::new(sftp, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_open`](ssh2::Session::channel_open).
-    pub async fn channel_open<'b>(
-        &'b self,
+    pub async fn channel_open(
+        &self,
         channel_type: &str,
         window_size: u32,
         packet_size: u32,
         message: Option<&str>,
-    ) -> Result<Channel<'b>, Error> {
+    ) -> Result<Channel, Error> {
         let channel = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner
                 .channel_open(channel_type, window_size, packet_size, message)
         })
         .await?;
-        Ok(Channel::new(channel, &self.inner, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`banner`](ssh2::Session::banner).

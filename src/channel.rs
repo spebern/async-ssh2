@@ -13,14 +13,14 @@ use std::{
 };
 
 /// See [`Channel`](ssh2::Channel).
-pub struct Channel<'a> {
+pub struct Channel {
     inner: ssh2::Channel,
-    inner_session: &'a ssh2::Session,
+    inner_session: ssh2::Session,
     stream: Arc<Async<TcpStream>>,
 }
 
-impl<'a> Channel<'a> {
-    pub(crate) fn new<'b>(channel: ssh2::Channel, session: &'b ssh2::Session, stream: Arc<Async<TcpStream>>) -> Channel<'b> {
+impl Channel {
+    pub(crate) fn new(channel: ssh2::Channel, session: ssh2::Session, stream: Arc<Async<TcpStream>>) -> Channel {
         Channel {
             inner: channel,
             inner_session: session,
@@ -30,7 +30,8 @@ impl<'a> Channel<'a> {
 
     /// See [`setenv`](ssh2::Channel::setenv).
     pub async fn setenv(&mut self, var: &str, val: &str) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.setenv(var, val)).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.setenv(var, val)).await
     }
 
     /// See [`request_pty`](ssh2::Channel::request_pty).
@@ -40,8 +41,9 @@ impl<'a> Channel<'a> {
         mode: Option<PtyModes>,
         dim: Option<(u32, u32, u32, u32)>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || {
-            self.inner.request_pty(term, mode.clone(), dim)
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || {
+            inner.request_pty(term, mode.clone(), dim)
         })
         .await
     }
@@ -54,8 +56,9 @@ impl<'a> Channel<'a> {
         width_px: Option<u32>,
         height_px: Option<u32>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || {
-            self.inner
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || {
+            inner
                 .request_pty_size(width, height, width_px, height_px)
         })
         .await
@@ -63,17 +66,20 @@ impl<'a> Channel<'a> {
 
     /// See [`exec`](ssh2::Channel::exec).
     pub async fn exec(&mut self, command: &str) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.exec(command)).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.exec(command)).await
     }
 
     /// See [`shell`](ssh2::Channel::shell).
     pub async fn shell(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.shell()).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.shell()).await
     }
 
     /// See [`subsystem`](ssh2::Channel::subsystem).
     pub async fn subsystem(&mut self, system: &str) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.subsystem(system)).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.subsystem(system)).await
     }
 
     /// See [`process_startup`](ssh2::Channel::process_startup).
@@ -82,8 +88,9 @@ impl<'a> Channel<'a> {
         request: &str,
         message: Option<&str>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || {
-            self.inner.process_startup(request, message)
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || {
+            inner.process_startup(request, message)
         })
         .await
     }
@@ -100,8 +107,9 @@ impl<'a> Channel<'a> {
 
     /// See [`handle_extended_data`](ssh2::Channel::handle_extended_data).
     pub async fn handle_extended_data(&mut self, mode: ExtendedData) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || {
-            self.inner.handle_extended_data(mode)
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || {
+            inner.handle_extended_data(mode)
         })
         .await
     }
@@ -128,8 +136,9 @@ impl<'a> Channel<'a> {
 
     /// See [`adjust_receive_window`](ssh2::Channel::adjust_receive_window).
     pub async fn adjust_receive_window(&mut self, adjust: u64, force: bool) -> Result<u64, Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || {
-            self.inner.adjust_receive_window(adjust, force)
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || {
+            inner.adjust_receive_window(adjust, force)
         })
         .await
     }
@@ -141,53 +150,65 @@ impl<'a> Channel<'a> {
 
     /// See [`send_eof`](ssh2::Channel::send_eof).
     pub async fn send_eof(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.send_eof()).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.send_eof()).await
     }
 
     /// See [`wait_eof`](ssh2::Channel::wait_eof).
     pub async fn wait_eof(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.wait_eof()).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.wait_eof()).await
     }
 
     /// See [`close`](ssh2::Channel::close).
     pub async fn close(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.close()).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.close()).await
     }
 
     /// See [`wait_close`](ssh2::Channel::wait_close).
     pub async fn wait_close(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(&self.stream.clone(), self.inner_session, || self.inner.wait_close()).await
+        let inner = &mut self.inner;
+        run_ssh2_fn(&self.stream, &self.inner_session, || inner.wait_close()).await
     }
 }
 
-impl<'a> AsyncRead for Channel<'a> {
+impl AsyncRead for Channel {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        poll_ssh2_io_op(cx, &self.stream.clone(), &self.inner_session, || self.inner.read(buf))
+        let this = self.get_mut();
+        let inner = &mut this.inner;
+        poll_ssh2_io_op(cx, &this.stream, &this.inner_session, || inner.read(buf))
     }
 }
 
-impl<'a> AsyncWrite for Channel<'a> {
+impl AsyncWrite for Channel {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        poll_ssh2_io_op(cx, &self.stream.clone(), &self.inner_session, || self.inner.write(buf))
+        let this = self.get_mut();
+        let inner = &mut this.inner;
+        poll_ssh2_io_op(cx, &this.stream, &this.inner_session, || inner.write(buf))
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        poll_ssh2_io_op(cx, &self.stream.clone(), &self.inner_session, || self.inner.flush())
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        let inner = &mut this.inner;
+        poll_ssh2_io_op(cx, &this.stream, &this.inner_session, || inner.flush())
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        let inner = &mut this.inner;
         poll_ssh2_io_op(cx, 
-            &self.stream.clone(), 
-            &self.inner_session, 
-            || self.inner.close().map_err(|e| io::Error::from(ssh2::Error::from_errno(e.code())))
+            &this.stream, 
+            &this.inner_session, 
+            || inner.close().map_err(|e| io::Error::from(ssh2::Error::from_errno(e.code())))
         )
     }
 }
