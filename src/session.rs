@@ -1,10 +1,10 @@
 use crate::{
     agent::Agent, channel::Channel, listener::Listener, sftp::Sftp, util::run_ssh2_fn, Error,
 };
-use smol::Async;
+use async_io::Async;
 use ssh2::{
     self, DisconnectCode, HashType, HostKeyType, KeyboardInteractivePrompt, KnownHosts, MethodType,
-    ScpFileStat,
+    ScpFileStat, BlockDirections
 };
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -14,7 +14,7 @@ use std::{
     convert::From,
     net::TcpStream,
     path::Path,
-    sync::{Arc, Once},
+    sync::Arc,
 };
 
 /// See [`Session`](ssh2::Session).
@@ -47,10 +47,6 @@ impl Session {
     /// See [`new`](ssh2::Session::new).
     pub fn new() -> Result<Session, Error> {
         let session = ssh2::Session::new()?;
-        static START: Once = Once::new();
-        START.call_once(|| {
-            std::thread::spawn(|| smol::run(futures::future::pending::<()>()));
-        });
         session.set_blocking(false);
 
         Ok(Self {
@@ -61,7 +57,7 @@ impl Session {
 
     /// See [`set_banner`](ssh2::Session::set_banner).
     pub async fn set_banner(&self, banner: &str) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.set_banner(banner)
         })
         .await
@@ -94,7 +90,7 @@ impl Session {
 
     /// See [`handshake`](ssh2::Session::handshake).
     pub async fn handshake(&mut self) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.clone().handshake()
         })
         .await
@@ -104,12 +100,13 @@ impl Session {
     ///
     /// ```rust,no_run
     /// use async_ssh2::Session;
-    /// use std::net::TcpStream;
-    /// use smol::Async;
+    /// use std::net::{ToSocketAddrs, SocketAddr, TcpStream};
+    /// use async_io::Async;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let stream = Async::<TcpStream>::connect("127.0.0.1:22").await.unwrap();
+    ///     let mut addr = SocketAddr::from(([127, 0, 0, 1], 22)).to_socket_addrs().unwrap();
+    ///     let stream = Async::<TcpStream>::connect(addr.next().unwrap()).await.unwrap();
     ///     let mut sess = async_ssh2::Session::new().unwrap();
     ///     sess.set_tcp_stream(stream).unwrap();
     /// }
@@ -131,7 +128,7 @@ impl Session {
 
     /// See [`userauth_password`](ssh2::Session::userauth_password).
     pub async fn userauth_password(&self, username: &str, password: &str) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.userauth_password(username, password)
         })
         .await
@@ -154,7 +151,7 @@ impl Session {
         let identities = agent.identities()?;
         let identity = match identities.get(0) {
             Some(identity) => identity,
-            None => return Err(Error::from(ssh2::Error::from_errno(-4))),
+            None => return Err(Error::from(ssh2::Error::from_errno(ssh2::ErrorCode::Session(-4)))),
         };
         agent.userauth(username, &identity).await
     }
@@ -167,7 +164,7 @@ impl Session {
         privatekey: &Path,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner
                 .userauth_pubkey_file(username, pubkey, privatekey, passphrase)
         })
@@ -183,7 +180,7 @@ impl Session {
         privatekeydata: &str,
         passphrase: Option<&str>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner
                 .userauth_pubkey_memory(username, pubkeydata, privatekeydata, passphrase)
         })
@@ -201,7 +198,7 @@ impl Session {
         hostname: &str,
         local_username: Option<&str>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.userauth_hostbased_file(
                 username,
                 publickey,
@@ -221,7 +218,7 @@ impl Session {
 
     /// See [`auth_methods`](ssh2::Session::auth_methods).
     pub async fn auth_methods(&self, username: &str) -> Result<&str, Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.auth_methods(username)
         })
         .await
@@ -246,7 +243,7 @@ impl Session {
     /// See [`agent`](ssh2::Session::agent).
     pub fn agent(&self) -> Result<Agent, Error> {
         let agent = self.inner.agent()?;
-        Ok(Agent::new(agent, self.stream.as_ref().unwrap().clone()))
+        Ok(Agent::new(agent, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`known_hosts`](ssh2::Session::known_hosts).
@@ -256,11 +253,11 @@ impl Session {
 
     /// See [`channel_session`](ssh2::Session::channel_session).
     pub async fn channel_session(&self) -> Result<Channel, Error> {
-        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.channel_session()
         })
         .await?;
-        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_direct_tcpip`](ssh2::Session::channel_direct_tcpip).
@@ -270,11 +267,11 @@ impl Session {
         port: u16,
         src: Option<(&str, u16)>,
     ) -> Result<Channel, Error> {
-        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner.channel_direct_tcpip(host, port, src)
         })
         .await?;
-        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_forward_listen`](ssh2::Session::channel_forward_listen).
@@ -284,13 +281,13 @@ impl Session {
         host: Option<&str>,
         queue_maxsize: Option<u32>,
     ) -> Result<(Listener, u16), Error> {
-        let (listener, port) = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        let (listener, port) = run_ssh2_fn(self.stream.as_ref().unwrap(), &self.inner, || {
             self.inner
                 .channel_forward_listen(remote_port, host, queue_maxsize)
         })
         .await?;
         Ok((
-            Listener::new(listener, self.stream.as_ref().unwrap().clone()),
+            Listener::new(listener, self.inner.clone(), self.stream.as_ref().unwrap().clone()),
             port,
         ))
     }
@@ -298,9 +295,9 @@ impl Session {
     /// See [`scp_recv`](ssh2::Session::scp_recv).
     pub async fn scp_recv(&self, path: &Path) -> Result<(Channel, ScpFileStat), Error> {
         let (channel, file_stat) =
-            run_ssh2_fn(self.stream.as_ref().unwrap(), || self.inner.scp_recv(path)).await?;
+            run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || self.inner.scp_recv(path)).await?;
         Ok((
-            Channel::new(channel, self.stream.as_ref().unwrap().clone()),
+            Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()),
             file_stat,
         ))
     }
@@ -313,17 +310,17 @@ impl Session {
         size: u64,
         times: Option<(u64, u64)>,
     ) -> Result<Channel, Error> {
-        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner.scp_send(remote_path, mode, size, times)
         })
         .await?;
-        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`sftp`](ssh2::Session::sftp).
-    pub async fn sftp(&self) -> Result<Sftp, Error> {
-        let sftp = run_ssh2_fn(self.stream.as_ref().unwrap(), || self.inner.sftp()).await?;
-        Ok(Sftp::new(sftp, self.stream.as_ref().unwrap().clone()))
+    pub async fn sftp(& self) -> Result<Sftp, Error> {
+        let sftp = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || self.inner.sftp()).await?;
+        Ok(Sftp::new(sftp, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`channel_open`](ssh2::Session::channel_open).
@@ -334,12 +331,12 @@ impl Session {
         packet_size: u32,
         message: Option<&str>,
     ) -> Result<Channel, Error> {
-        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        let channel = run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner
                 .channel_open(channel_type, window_size, packet_size, message)
         })
         .await?;
-        Ok(Channel::new(channel, self.stream.as_ref().unwrap().clone()))
+        Ok(Channel::new(channel, self.inner.clone(), self.stream.as_ref().unwrap().clone()))
     }
 
     /// See [`banner`](ssh2::Session::banner).
@@ -369,7 +366,7 @@ impl Session {
 
     /// See [`keepalive_send`](ssh2::Session::keepalive_send).
     pub async fn keepalive_send(&self) -> Result<u32, Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner.keepalive_send()
         })
         .await
@@ -382,11 +379,22 @@ impl Session {
         description: &str,
         lang: Option<&str>,
     ) -> Result<(), Error> {
-        run_ssh2_fn(self.stream.as_ref().unwrap(), || {
+        run_ssh2_fn(self.stream.as_ref().unwrap(),  &self.inner, || {
             self.inner.disconnect(reason, description, lang)
         })
         .await
     }
+
+    /// See [`block_directions`](ssh2::Session::block_directions).
+    pub fn block_directions(&self) -> BlockDirections {
+        self.inner.block_directions()
+    }
+
+/* This needs PR#209 on ssh2-rs (https://github.com/alexcrichton/ssh2-rs/pull/209)
+    /// See [`trace`](ssh2::Session::trace).
+    pub fn trace(&self, bitmask: ssh2::TraceFlags) {
+        self.inner.trace(bitmask);
+    }*/
 }
 
 #[cfg(unix)]
