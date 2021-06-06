@@ -1,6 +1,4 @@
-# async-ssh2-rs (deprecated)
-
-PLEASE USE https://crates.io/crates/async-ssh2-lite INSTEAD.
+# async-ssh2-rs
 
 [![Build Status](https://travis-ci.com/spebern/async-ssh2.svg?branch=master)](https://travis-ci.com/spebern/async-ssh2)
 [![Build Status](https://github.com/spebern/async-ssh2/workflows/linux/badge.svg)](https://github.com/spebern/async-ssh2/actions?workflow=linux)
