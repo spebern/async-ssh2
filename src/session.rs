@@ -390,11 +390,10 @@ impl Session {
         self.inner.block_directions()
     }
 
-/* This needs PR#209 on ssh2-rs (https://github.com/alexcrichton/ssh2-rs/pull/209)
     /// See [`trace`](ssh2::Session::trace).
     pub fn trace(&self, bitmask: ssh2::TraceFlags) {
         self.inner.trace(bitmask);
-    }*/
+    }
 }
 
 #[cfg(unix)]
