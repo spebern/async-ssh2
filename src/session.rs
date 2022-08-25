@@ -18,6 +18,7 @@ use std::{
 };
 
 /// See [`Session`](ssh2::Session).
+#[derive(Clone)]
 pub struct Session {
     inner: ssh2::Session,
     stream: Option<Arc<Async<TcpStream>>>,
